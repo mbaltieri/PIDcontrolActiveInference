@@ -3,7 +3,10 @@
 """
 Created on Sun Mar  4 15:52:21 2018
 
-Active inference version of a PID controller
+Active inference version of a PID controller. Example built on cruise control 
+problem from Astrom and Murray (2010), pp 65-69.
+In this specific example, only Proportional and Integral terms are used, 
+since standard cruise control problems do not usually adopt the D-term.
 
 @author: manuelbaltieri
 """
@@ -14,48 +17,47 @@ import matplotlib.pyplot as plt
 dt = .01
 T = 30
 iterations = int(T / dt)
+gamma = 1                                                   # drift in OU process
 plt.close('all')
 
 obs_states = 1
-hidden_states = 1                               # x, in Friston's work
-hidden_causes = 1                               # v, in Friston's work
+hidden_states = 1                                           # x, in Friston's work
+hidden_causes = 1                                           # v, in Friston's work
 states = obs_states + hidden_states
-temp_orders_states = 3
-temp_orders_causes = 3
+temp_orders_states = 3                                      # generalised coordinates for hidden states x, but only using n-1
+temp_orders_causes = 3                                      # generalised coordinates for hidden causes v (or \eta in biorxiv manuscript), but only using n-1
 
 
 
 ### cruise control problem from Astrom and Murray (2010), pp 65-69
 
 # environment parameters
-ga = 9.81                                   # gravitational acceleration
-theta = 4.                                  # hill angle
-C_r = .01                                   # rolling friction coefficient
-C_d = .32                                   # drag coefficient
-rho_air = 1.3                               # air density
-A = 2.4                                     # frontal area agent
+ga = 9.81                                                   # gravitational acceleration
+theta = 4.                                                  # hill angle
+C_r = .01                                                   # rolling friction coefficient
+C_d = .32                                                   # drag coefficient
+rho_air = 1.3                                               # air density
+A = 2.4                                                     # frontal area agent
 
 # car's parameters
-m = 1000                                    # car mass
-T_m = 190                                   # maximum torque
-omega_m = 420                               # engine speed to reach T_m
-alpha_n = 12                                # = gear ration/wheel radius,
-                                            # a1 = 40, a2 = 25, a3 = 16, a4 = 12, a5 = 10
+m = 1000                                                    # car mass
+T_m = 190                                                   # maximum torque
+omega_m = 420                                               # engine speed to reach T_m
+alpha_n = 12                                                # = gear ration/wheel radius,
+                                                            # a1 = 40, a2 = 25, a3 = 16, a4 = 12, a5 = 10
 beta = .4
 
-x = np.zeros((hidden_states, temp_orders_states))   # position
+x = np.zeros((hidden_states, temp_orders_states))           # position
 v = np.zeros((hidden_causes, temp_orders_states - 1))
 y = np.zeros((obs_states, temp_orders_states - 1))
 eta = np.zeros((hidden_causes, temp_orders_states - 1))
 
-eta[0, 0] = 10              # desired velocity
+eta[0, 0] = 10                                              # desired velocity
 
 
 
 
 ### free energy variables
-
-FE = np.zeros((iterations,))
 a = np.zeros((obs_states, temp_orders_states))
 
 mu_x = np.random.randn(hidden_states, temp_orders_states)
@@ -69,13 +71,13 @@ dFdmu_x = np.zeros((hidden_states, temp_orders_states))
 dFdmu_v = np.zeros((hidden_causes, temp_orders_states))
 Dmu_x = np.zeros((hidden_states, temp_orders_states))
 Dmu_v = np.zeros((hidden_causes, temp_orders_states))
-eta_mu_x = 1
-eta_a = 1
+k_mu_x = 1                                                  # learning rate perception
+k_a = 1                                                     # learning rate action
 
 # noise on sensory input (world - generative process)
 #gamma_z = -16 * np.ones((obs_states, temp_orders_states - 1))  # log-precisions
 #gamma_z[0, 0] = 4
-gamma_z = 0 * np.ones((obs_states, temp_orders_states - 1))    # log-precisions
+gamma_z = 2 * np.ones((obs_states, temp_orders_states - 1))    # log-precisions
 pi_z = np.exp(gamma_z) * np.ones((obs_states, temp_orders_states - 1))
 sigma_z = 1 / (np.sqrt(pi_z))
 z = np.zeros((iterations, obs_states, temp_orders_states - 1))
@@ -115,10 +117,13 @@ a_history = np.zeros((iterations, temp_orders_states))
 xi_z_history = np.zeros((iterations, obs_states, temp_orders_states - 1))
 xi_w_history = np.zeros((iterations, hidden_states, temp_orders_states - 1))
 
+FE_history = np.zeros((iterations,))
 
 
 
-### functions ###
+
+### FUNCTIONS ###
+
 ## cruise control ##
 
 def force_gravitation(theta):
@@ -174,8 +179,13 @@ for i in range(iterations - 1):
     else:
         v[0,0] = 0.0
     
+    
+    # Analytical noise, for one extra level of generalised cooordinates, this is equivalent to an ornstein-uhlenbeck process
+    w[i, 0, 1] = - gamma * w[i, 0, 0] + w[i, 0, 1] / np.sqrt(dt)
+    z[i, 0, 1] = - gamma * z[i, 0, 0] + z[i, 0, 1] / np.sqrt(dt)
+    
+    w[i+1, 0, 0] = w[i, 0, 0] + dt * (w[i, 0, 1])                               # noise in dynamics, at the moment not used in generative process
     z[i+1, 0, 0] = z[i, 0, 0] + dt * (z[i, 0, 1])
-    w[i+1, 0, 0] = w[i, 0, 0] + dt * (w[i, 0, 1])
     
     rho = getObservation(x, v, a) + z[i, 0, :]
     
@@ -193,8 +203,8 @@ for i in range(iterations - 1):
     
     
     # update equations
-    mu_x += dt * (Dmu_x - eta_mu_x * dFdmu_x)
-    a += dt * - eta_a * dFda
+    mu_x += dt * (Dmu_x - k_mu_x * dFdmu_x)
+    a += dt * - k_a * dFda
     
     
     # save history
@@ -206,7 +216,7 @@ for i in range(iterations - 1):
     
     xi_z_history[i, :, :] = xi_z
     xi_w_history[i, :, :] = xi_w
-    FE[i] = np.sum(xi_z) + np.sum(xi_w)
+    FE_history[i] = np.sum(xi_z) + np.sum(xi_w)
 
 
 plt.figure()
