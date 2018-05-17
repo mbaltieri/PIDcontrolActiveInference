@@ -17,6 +17,7 @@ import matplotlib.pyplot as plt
 dt = .01
 T = 30
 iterations = int(T / dt)
+alpha = 100000.                                              # drift in Generative Model
 gamma = 1                                                   # drift in OU process
 plt.close('all')
 
@@ -52,33 +53,37 @@ v = np.zeros((hidden_causes, temp_orders_states - 1))
 y = np.zeros((obs_states, temp_orders_states - 1))
 eta = np.zeros((hidden_causes, temp_orders_states - 1))
 
-eta[0, 0] = 10                                              # desired velocity
+eta[0, 0] = 10*alpha                                         # desired velocity 
 
 
 
 
 ### free energy variables
 a = np.zeros((obs_states, temp_orders_states))
+phi = np.zeros((obs_states, temp_orders_states-1))
 
 mu_x = np.random.randn(hidden_states, temp_orders_states)
 mu_x = np.zeros((hidden_states, temp_orders_states))
 mu_v = np.random.randn(hidden_causes, temp_orders_states)
 mu_v = np.zeros((hidden_causes, temp_orders_states))
-mu_gamma_z = 10 * np.ones((obs_states, temp_orders_states))
 
 # minimisation variables and parameters
 dFdmu_x = np.zeros((hidden_states, temp_orders_states))
 dFdmu_v = np.zeros((hidden_causes, temp_orders_states))
+dFdmu_gamma_z = np.zeros((hidden_causes, temp_orders_states))
 Dmu_x = np.zeros((hidden_states, temp_orders_states))
 Dmu_v = np.zeros((hidden_causes, temp_orders_states))
 k_mu_x = 1                                                  # learning rate perception
 k_a = 1                                                     # learning rate action
+k_mu_gamma_z = 1                                            # learning rate attention
+kappa = 10                                                 # damping on precisions minimisation
 
 # noise on sensory input (world - generative process)
 #gamma_z = -16 * np.ones((obs_states, temp_orders_states - 1))  # log-precisions
 #gamma_z[0, 0] = 4
-gamma_z = 2 * np.ones((obs_states, temp_orders_states - 1))    # log-precisions
+gamma_z = 0 * np.ones((obs_states, temp_orders_states - 1))    # log-precisions
 pi_z = np.exp(gamma_z) * np.ones((obs_states, temp_orders_states - 1))
+pi_z[0, 1] = pi_z[0, 0] / (2 * gamma)
 sigma_z = 1 / (np.sqrt(pi_z))
 z = np.zeros((iterations, obs_states, temp_orders_states - 1))
 for i in range(obs_states):
@@ -88,6 +93,7 @@ for i in range(obs_states):
 # noise on motion of hidden states (world - generative process)
 gamma_w = 0                                                  # log-precision
 pi_w = np.exp(gamma_w) * np.ones((hidden_states, temp_orders_states - 1))
+pi_w[0, 1] = pi_w[0, 0] / (2 * gamma)
 sigma_w = 1 / (np.sqrt(pi_w))
 w = np.zeros((iterations, hidden_states, temp_orders_states - 1))
 for i in range(hidden_states):
@@ -98,11 +104,12 @@ for i in range(hidden_states):
 # agent's estimates of the noise (agent - generative model)
 #mu_gamma_z = -16 * np.ones((obs_states, temp_orders_states - 1))  # log-precisions
 #mu_gamma_z[0, 0] = -8
-mu_gamma_z = 4 * np.ones((obs_states, temp_orders_states - 1))    # log-precisions
-pi_z = np.exp(mu_gamma_z) * np.ones((obs_states, temp_orders_states - 1))
-mu_gamma_w = 2                                                  # log-precision
-pi_w = np.exp(mu_gamma_w) * np.ones((hidden_states, temp_orders_states - 1))
-
+mu_gamma_z = 3.41 * np.ones((obs_states, temp_orders_states - 1))    # log-precisions
+mu_gamma_z[0, 1] = mu_gamma_z[0, 0] - np.log(2 * gamma)
+mu_pi_z = np.exp(mu_gamma_z) * np.ones((obs_states, temp_orders_states - 1))
+mu_gamma_w = -19 * np.ones((obs_states, temp_orders_states - 1))   # log-precision
+mu_gamma_w[0, 1] = mu_gamma_w[0, 0] - np.log(2)
+mu_pi_w = np.exp(mu_gamma_w) * np.ones((hidden_states, temp_orders_states - 1))
 
 
 # history
@@ -113,6 +120,11 @@ rho_history = np.zeros((iterations, obs_states, temp_orders_states - 1))
 mu_x_history = np.zeros((iterations, hidden_states, temp_orders_states))
 eta_history = np.zeros((iterations, hidden_causes, temp_orders_states - 1))
 a_history = np.zeros((iterations, temp_orders_states))
+mu_gamma_z_history = np.zeros((iterations, temp_orders_states-1))
+mu_pi_z_history = np.zeros((iterations, temp_orders_states-1))
+dFdmu_gamma_z_history = np.zeros((iterations, temp_orders_states-1))
+phi_history = np.zeros((iterations, temp_orders_states-1))
+
 
 xi_z_history = np.zeros((iterations, obs_states, temp_orders_states - 1))
 xi_w_history = np.zeros((iterations, hidden_states, temp_orders_states - 1))
@@ -173,11 +185,19 @@ def getObservation(x, v, a):
 for i in range(iterations - 1):
     print(i)
     
+    # re-encode precisions
+    mu_gamma_z[0, 1] = mu_gamma_z[0, 0] - np.log(2 * gamma)
+    mu_pi_z = np.exp(mu_gamma_z) * np.ones((obs_states, temp_orders_states - 1))
+#    mu_pi_z[0, 1] = mu_pi_z[0, 0] / (2 * gamma)
+    
+#    if i > int(50/dt):
+#        kappa = 100
+    
     # include an external disturbance to test integral term
-    if (i > iterations/3) and (i < 2*iterations/3):
-        v[0,0] = 50.0
-    else:
-        v[0,0] = 0.0
+#    if (i > iterations/3) and (i < 2*iterations/3):
+#        v[0,0] = 50.0
+#    else:
+#        v[0,0] = 0.0
     
     
     # Analytical noise, for one extra level of generalised cooordinates, this is equivalent to an ornstein-uhlenbeck process
@@ -191,32 +211,52 @@ for i in range(iterations - 1):
     
     # prediction errors (only used for plotting)
     eps_z = y - g_gm(mu_x[:, :-1], mu_v)
-    xi_z = pi_z * eps_z
+    xi_z = mu_pi_z * eps_z
     eps_w = mu_x[:, 1:] - f_gm(mu_x[:, :-1], mu_v[:, :-1])
-    xi_w = pi_w * eps_w
+    xi_w = mu_pi_w * eps_w
     
-    # minimise free energy
+    ### minimise free energy ###
+    # perception
     Dmu_x[0, :-1] = mu_x[0, 1:]
-    dFdmu_x[0, :-1] = np.array([pi_z * -(rho - mu_x[0, :-1]) + pi_w * [mu_x[0, 1:] + mu_x[0, :-1] - eta]])
+    dFdmu_x[0, :-1] = np.array([mu_pi_z * - (rho - mu_x[0, :-1]) + mu_pi_w * alpha * [mu_x[0, 1:] + alpha * mu_x[0, :-1] - eta]])
+    dFdmu_x[0, 1:] += np.squeeze(mu_pi_w * [mu_x[0, :-1] + alpha * mu_x[0, :-1] - eta])
     
-    dFda = np.array([0., np.sum(pi_z * (rho - mu_x[0, :-1])), 0.])
+    # action
+    dFda = np.array([0., np.sum(mu_pi_z * (rho - mu_x[0, :-1])), 0.])
+    
+    # attention
+    dFdmu_gamma_z = .5 * (np.exp(mu_gamma_z) * (rho - mu_x[0, :-1])**2 - 1)
     
     
     # update equations
     mu_x += dt * (Dmu_x - k_mu_x * dFdmu_x)
-    a += dt * - k_a * dFda
+#    a += dt * - k_a * dFda
+    if i > 9/dt:
+        mu_gamma_w[0, 0] = -19
+        mu_gamma_w[0, 1] = mu_gamma_w[0, 0] - np.log(2)
+        mu_pi_w = np.exp(mu_gamma_w) * np.ones((hidden_states, temp_orders_states - 1))
+        a += dt * - k_a * dFda
+#    else:
+#        phi += dt * (- dFdmu_gamma_z - kappa * phi)
+#        #mu_gamma_z += dt * k_mu_gamma_z * phi
+#        mu_gamma_z[0,0] += dt * k_mu_gamma_z * phi[0,0]
     
     
     # save history
     rho_history[i, :] = rho
     mu_x_history[i, :, :] = mu_x
-    eta_history[i] = eta
+    eta_history[i] = eta/alpha
     a_history[i] = a
     v_history[i] = v
+    mu_gamma_z_history[i] = mu_gamma_z
     
     xi_z_history[i, :, :] = xi_z
     xi_w_history[i, :, :] = xi_w
     FE_history[i] = np.sum(xi_z) + np.sum(xi_w)
+    
+    phi_history[i] = phi
+    dFdmu_gamma_z_history[i] = dFdmu_gamma_z
+    mu_pi_z_history[i] = mu_pi_z
 
 
 plt.figure()
@@ -244,7 +284,25 @@ plt.figure()
 plt.title('Action')
 plt.plot(range(iterations-1), a_history[:-1,1])
 
-    
-    
-    
-    
+plt.figure()
+plt.title('Gains')
+plt.plot(range(iterations-1), mu_gamma_z_history[:-1, 0])
+
+plt.figure()
+plt.title('dFdmu_gamma_z')
+plt.plot(range(iterations-1), dFdmu_gamma_z_history[:-1, 0])
+
+plt.figure()
+plt.title('Phi')
+plt.plot(range(iterations-1), phi_history[:-1, 0])
+
+plt.figure()
+plt.title('Mu_pi_z')
+plt.plot(range(iterations-1), mu_pi_z_history[:-1, 0])
+
+
+
+
+
+
+
