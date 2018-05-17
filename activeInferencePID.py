@@ -15,7 +15,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 dt = .01
-T = 30
+T = 500
+T_swith = int(T/10*9)
 iterations = int(T / dt)
 alpha = 100000.                                              # drift in Generative Model
 gamma = 1                                                   # drift in OU process
@@ -104,10 +105,10 @@ for i in range(hidden_states):
 # agent's estimates of the noise (agent - generative model)
 #mu_gamma_z = -16 * np.ones((obs_states, temp_orders_states - 1))  # log-precisions
 #mu_gamma_z[0, 0] = -8
-mu_gamma_z = 3.41 * np.ones((obs_states, temp_orders_states - 1))    # log-precisions
+mu_gamma_z = 1 * np.ones((obs_states, temp_orders_states - 1))    # log-precisions
 mu_gamma_z[0, 1] = mu_gamma_z[0, 0] - np.log(2 * gamma)
 mu_pi_z = np.exp(mu_gamma_z) * np.ones((obs_states, temp_orders_states - 1))
-mu_gamma_w = -19 * np.ones((obs_states, temp_orders_states - 1))   # log-precision
+mu_gamma_w = -190 * np.ones((obs_states, temp_orders_states - 1))   # log-precision
 mu_gamma_w[0, 1] = mu_gamma_w[0, 0] - np.log(2)
 mu_pi_w = np.exp(mu_gamma_w) * np.ones((hidden_states, temp_orders_states - 1))
 
@@ -231,15 +232,20 @@ for i in range(iterations - 1):
     # update equations
     mu_x += dt * (Dmu_x - k_mu_x * dFdmu_x)
 #    a += dt * - k_a * dFda
-    if i > 9/dt:
+    if i == T_swith/dt:
+        mu_x[0, :] = np.zeros((hidden_states, temp_orders_states))
+        x = np.zeros((hidden_states, temp_orders_states))
+        v = np.zeros((hidden_states, temp_orders_states - 1))
         mu_gamma_w[0, 0] = -19
         mu_gamma_w[0, 1] = mu_gamma_w[0, 0] - np.log(2)
         mu_pi_w = np.exp(mu_gamma_w) * np.ones((hidden_states, temp_orders_states - 1))
+        
+    if i > T_swith/dt:
         a += dt * - k_a * dFda
-#    else:
-#        phi += dt * (- dFdmu_gamma_z - kappa * phi)
-#        #mu_gamma_z += dt * k_mu_gamma_z * phi
-#        mu_gamma_z[0,0] += dt * k_mu_gamma_z * phi[0,0]
+    else:
+        phi += dt * (- dFdmu_gamma_z - kappa * phi)
+        #mu_gamma_z += dt * k_mu_gamma_z * phi
+        mu_gamma_z[0,0] += dt * k_mu_gamma_z * phi[0,0]
     
     
     # save history
