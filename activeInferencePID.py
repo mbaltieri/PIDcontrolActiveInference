@@ -15,8 +15,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 dt = .01
-T = 500
-T_swith = int(T/10*9)
+T = 200
+T_swith = int(T)
 iterations = int(T / dt)
 alpha = 100000.                                              # drift in Generative Model
 gamma = 1                                                   # drift in OU process
@@ -42,7 +42,8 @@ rho_air = 1.3                                               # air density
 A = 2.4                                                     # frontal area agent
 
 # car's parameters
-m = 1000                                                    # car mass
+#m = 1000                                                    # car mass (book example)
+m = 100                                                    # car mass
 T_m = 190                                                   # maximum torque
 omega_m = 420                                               # engine speed to reach T_m
 alpha_n = 12                                                # = gear ration/wheel radius,
@@ -105,10 +106,10 @@ for i in range(hidden_states):
 # agent's estimates of the noise (agent - generative model)
 #mu_gamma_z = -16 * np.ones((obs_states, temp_orders_states - 1))  # log-precisions
 #mu_gamma_z[0, 0] = -8
-mu_gamma_z = 1 * np.ones((obs_states, temp_orders_states - 1))    # log-precisions
+mu_gamma_z = 2 * np.ones((obs_states, temp_orders_states - 1))    # log-precisions
 mu_gamma_z[0, 1] = mu_gamma_z[0, 0] - np.log(2 * gamma)
 mu_pi_z = np.exp(mu_gamma_z) * np.ones((obs_states, temp_orders_states - 1))
-mu_gamma_w = -190 * np.ones((obs_states, temp_orders_states - 1))   # log-precision
+mu_gamma_w = -19 * np.ones((obs_states, temp_orders_states - 1))   # log-precision
 mu_gamma_w[0, 1] = mu_gamma_w[0, 0] - np.log(2)
 mu_pi_w = np.exp(mu_gamma_w) * np.ones((hidden_states, temp_orders_states - 1))
 
@@ -176,8 +177,8 @@ def f_gm(x, v):
     # no action in generative model, a = 0.0
     return f(x, v, 0.0)
 
-def getObservation(x, v, a):
-    x[:, 1:] = f(x[:, :-1], v, a[:, 1:]) + w[i, :, :]
+def getObservation(x, v, a, w):
+    x[:, 1:] = f(x[:, :-1], v, a[:, 1:])# + w[i, :, :]
     x[:, 0] += dt * x[:, 1]
     return g(x[:, :-1], v)
 
@@ -185,6 +186,7 @@ def getObservation(x, v, a):
 
 for i in range(iterations - 1):
     print(i)
+#    kappa = 70 * np.tanh(.01*i/T) + 10.0
     
     # re-encode precisions
     mu_gamma_z[0, 1] = mu_gamma_z[0, 0] - np.log(2 * gamma)
@@ -208,7 +210,7 @@ for i in range(iterations - 1):
     w[i+1, 0, 0] = w[i, 0, 0] + dt * (w[i, 0, 1])                               # noise in dynamics, at the moment not used in generative process
     z[i+1, 0, 0] = z[i, 0, 0] + dt * (z[i, 0, 1])
     
-    rho = getObservation(x, v, a) + z[i, 0, :]
+    rho = getObservation(x, v, a, w) + z[i, 0, :]
     
     # prediction errors (only used for plotting)
     eps_z = y - g_gm(mu_x[:, :-1], mu_v)
@@ -232,21 +234,23 @@ for i in range(iterations - 1):
     # update equations
     mu_x += dt * (Dmu_x - k_mu_x * dFdmu_x)
 #    a += dt * - k_a * dFda
-    if i == T_swith/dt:
-        mu_x[0, :] = np.zeros((hidden_states, temp_orders_states))
-        x = np.zeros((hidden_states, temp_orders_states))
-        v = np.zeros((hidden_states, temp_orders_states - 1))
-        mu_gamma_w[0, 0] = -19
-        mu_gamma_w[0, 1] = mu_gamma_w[0, 0] - np.log(2)
-        mu_pi_w = np.exp(mu_gamma_w) * np.ones((hidden_states, temp_orders_states - 1))
+#    if i == T_swith/dt:
+#        mu_gamma_w[0, 0] = -22                                  # REALLY INTERERESTING, if this is too high then the observations start to oscillate since the switch that introduces desires generates a sudden prediction error, better a "weaker" desire
+#        mu_gamma_w[0, 1] = mu_gamma_w[0, 0] - np.log(2)
+#        mu_pi_w = np.exp(mu_gamma_w) * np.ones((hidden_states, temp_orders_states - 1))
         
+#    if i == 2*T_swith/dt:
+#        mu_gamma_w[0, 0] = -19                                  # REALLY INTERERESTING, if this is too high then the observations start to oscillate since the switch that introduces desires generates a sudden prediction error, better a "weaker" desire
+#        mu_gamma_w[0, 1] = mu_gamma_w[0, 0] - np.log(2)
+#        mu_pi_w = np.exp(mu_gamma_w) * np.ones((hidden_states, temp_orders_states - 1))
+        
+        
+    phi += dt * (- dFdmu_gamma_z - kappa * phi)
+#    mu_gamma_z += dt * k_mu_gamma_z * phi
+    mu_gamma_z[0,0] += dt * k_mu_gamma_z * phi[0,0]
     if i > T_swith/dt:
         a += dt * - k_a * dFda
-    else:
-        phi += dt * (- dFdmu_gamma_z - kappa * phi)
-        #mu_gamma_z += dt * k_mu_gamma_z * phi
-        mu_gamma_z[0,0] += dt * k_mu_gamma_z * phi[0,0]
-    
+    a += dt * - k_a * dFda
     
     # save history
     rho_history[i, :] = rho
@@ -264,7 +268,6 @@ for i in range(iterations - 1):
     dFdmu_gamma_z_history[i] = dFdmu_gamma_z
     mu_pi_z_history[i] = mu_pi_z
 
-
 plt.figure()
 plt.plot(np.arange(0, T-dt, dt), rho_history[:-1,0,0], 'b', label='Measured velocity')
 plt.plot(np.arange(0, T-dt, dt), mu_x_history[:-1,0,0], 'r', label='Estimated velocity')
@@ -274,11 +277,20 @@ plt.xlabel('Time (s)')
 plt.ylabel('Velocity (km/h)')
 plt.legend()
 
-plt.figure()
-plt.plot(np.arange(0, T-dt, dt), v_history[:-1,0,0], 'k')
-plt.title('External disturbance')
-plt.xlabel('Time (s)')
-plt.ylabel('Velocity (km/h)')
+#plt.figure()
+#plt.plot(np.arange(T_swith, T-dt, dt), rho_history[int(T_swith/dt):-1,0,0], 'b', label='Measured velocity')
+#plt.plot(np.arange(T_swith, T-dt, dt), mu_x_history[int(T_swith/dt):-1,0,0], 'r', label='Estimated velocity')
+#plt.plot(np.arange(T_swith, T-dt, dt), eta_history[int(T_swith/dt):-1,0,0], 'g', label='Desired velocity')
+#plt.title('Car velocity')
+#plt.xlabel('Time (s)')
+#plt.ylabel('Velocity (km/h)')
+#plt.legend()
+
+#plt.figure()
+#plt.plot(np.arange(0, T-dt, dt), v_history[:-1,0,0], 'k')
+#plt.title('External disturbance')
+#plt.xlabel('Time (s)')
+#plt.ylabel('Velocity (km/h)')
 
 #plt.figure()
 #plt.title('Velocity')
@@ -291,8 +303,18 @@ plt.title('Action')
 plt.plot(range(iterations-1), a_history[:-1,1])
 
 plt.figure()
-plt.title('Gains')
-plt.plot(range(iterations-1), mu_gamma_z_history[:-1, 0])
+plt.title('Integral gain - Log-precision z0')
+plt.plot(range(iterations-1), mu_gamma_z_history[:-1, 0], 'r', label='Estimated precision')
+plt.axhline(y=gamma_z[0,0], xmin=0.0, xmax=T, color='b', label='Theoretical precision')
+plt.axhline(y=-np.log(np.var(rho_history[int(T/(4*dt)):-1,0,0])), xmin=0.0, xmax=T, color='g', label='Measured precision')
+plt.legend()
+
+plt.figure()
+plt.title('Proportional gain - Log-precision z1')
+plt.plot(range(iterations-1), mu_gamma_z_history[:-1, 1], 'r', label='Estimated precision')
+plt.axhline(y=gamma_z[0,1], xmin=0.0, xmax=T, color='b', label='Theoretical precision')
+plt.axhline(y=-np.log(np.var(rho_history[int(T/(4*dt)):-1,0,1])), xmin=0.0, xmax=T, color='g', label='Measured precision')
+plt.legend()
 
 plt.figure()
 plt.title('dFdmu_gamma_z')
