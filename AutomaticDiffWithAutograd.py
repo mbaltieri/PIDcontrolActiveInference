@@ -19,16 +19,16 @@ grad_tanh = grad(tanh)       # Obtain its gradient function
 a = grad_tanh(1.0)               # Evaluate the gradient at x = 1.0
 
 
-def f(x,y):
-    d = np.zeros((2,))
-    d[0] = x[0]**2 * x[1]
-    d[1] = 5 * x[0] + np.sin(x[1])
-    return d
+def f(x):
+#    d = np.zeros((2,))
+#    d[0] = x[0]**2 * x[1]
+#    d[1] = 5 * x[0] + np.sin(x[1])
+#    return d
     return np.array([x[0]**2 * x[1], 5 * x[0] + np.sin(x[1])])
 
 x0 = np.array([1.0, 0.0])
 jac_f = jacobian(f)
-bb = f(x0,0)
-b = jac_f(x0,0)
+bb = f(x0)
+b = jac_f(x0)
 
 c = np.eye(3, k=1)
