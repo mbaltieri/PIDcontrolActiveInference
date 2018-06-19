@@ -14,7 +14,7 @@ since standard cruise control problems do not usually adopt the D-term.
 import numpy as np
 import matplotlib.pyplot as plt
 
-dt = .0001
+dt = .01
 T = 100
 T_swith = int(T/5)
 iterations = int(T / dt)
