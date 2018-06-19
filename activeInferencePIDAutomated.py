@@ -18,7 +18,7 @@ import matplotlib.pyplot as plt
 from autograd import grad, jacobian
 
 dt = .01
-T = 50
+T = .1
 T_swith = T #int(T/10*9)
 iterations = int(T / dt)
 alpha = 100000.                                              # drift in Generative Model
@@ -45,7 +45,8 @@ rho_air = 1.3                                               # air density
 A = 2.4                                                     # frontal area agent
 
 # car's parameters
-m = 1000                                                    # car mass
+#m = 1000                                                    # car mass (book example)
+m = 100                                                    # car mass
 T_m = 190                                                   # maximum torque
 omega_m = 420                                               # engine speed to reach T_m
 alpha_n = 12                                                # = gear ration/wheel radius,
@@ -55,6 +56,7 @@ beta = .4
 x = np.zeros((hidden_states, temp_orders_states))           # position
 v = np.zeros((hidden_causes, temp_orders_states - 1))
 y = np.zeros((obs_states, temp_orders_states - 1))
+rho = np.zeros((obs_states, temp_orders_states))
 eta = np.zeros((hidden_causes, temp_orders_states - 1))
 
 eta[0, 0] = 10                                              # desired velocity 
@@ -108,7 +110,7 @@ for i in range(hidden_states):
 # agent's estimates of the noise (agent - generative model)
 #mu_gamma_z = -16 * np.ones((obs_states, temp_orders_states - 1))  # log-precisions
 #mu_gamma_z[0, 0] = -8
-mu_gamma_z = 4 * np.ones((obs_states, temp_orders_states - 1))    # log-precisions
+mu_gamma_z = 0 * np.ones((obs_states, temp_orders_states - 1))    # log-precisions
 mu_gamma_z[0, 1] = mu_gamma_z[0, 0] - np.log(2 * gamma)
 mu_pi_z = np.exp(mu_gamma_z) * np.ones((obs_states, temp_orders_states - 1))
 mu_gamma_w = -190 * np.ones((obs_states, temp_orders_states - 1))   # log-precision
@@ -180,12 +182,12 @@ def f_gm(x, v):
     return f(x, v, 0.0)
 
 def getObservation(x, v, a):
-    x[:, 1:] = f(x[:, :-1], v, a[:, 1:]) + w[i, :, :]
+    x[:, 1:] = f(x[:, :-1], v, a[:, 1:])# + w[i, :, :]
     x[:, 0] += dt * x[:, 1]
     return g(x[:, :-1], v)
 
 def F(rho, mu_x, mu_gamma_z, mu_pi_w):
-    return .5 * (np.sum(np.exp(mu_gamma_z) * (rho - mu_x[0, :-1])**2) +
+    return .5 * (np.sum(np.exp(mu_gamma_z) * (rho[0, :-1] - mu_x[0, :-1])**2) +
                  np.sum(mu_pi_w * (mu_x[0, 1:] + alpha * (mu_x[0, :-1] - eta))**2) -
                  np.log(np.prod(np.exp(mu_gamma_z)) * np.prod(mu_pi_w)))
     
@@ -193,7 +195,7 @@ def update_states(rho, mu_x, mu_gamma_z, mu_pi_w):
     return mode_path(mu_x) - dFdmu_states(rho, mu_x, mu_gamma_z, mu_pi_w)
 
 def mode_path(mu_x):
-    return np.dot(mu_x, np.eye(temp_orders_states, k=1))
+    return np.dot(mu_x, np.eye(temp_orders_states, k=-1))
     
 dFdmu_states = grad(F, 1)
 jac_dFdmu_states = jacobian(update_states)
@@ -218,13 +220,13 @@ for i in range(iterations - 1):
     
     
     # Analytical noise, for one extra level of generalised cooordinates, this is equivalent to an ornstein-uhlenbeck process
-    w[i, 0, 1] = - gamma * w[i, 0, 0] + w[i, 0, 1] / np.sqrt(dt)
-    z[i, 0, 1] = - gamma * z[i, 0, 0] + z[i, 0, 1] / np.sqrt(dt)
+    dw = - gamma * w[i, 0, 0] + w[i, 0, 1] / np.sqrt(dt)
+    dz = - gamma * z[i, 0, 0] + z[i, 0, 1] / np.sqrt(dt)
     
-    w[i+1, 0, 0] = w[i, 0, 0] + dt * (w[i, 0, 1])                               # noise in dynamics, at the moment not used in generative process
-    z[i+1, 0, 0] = z[i, 0, 0] + dt * (z[i, 0, 1])
+    w[i+1, 0, 0] = w[i, 0, 0] + dt * dw                               # noise in dynamics, at the moment not used in generative process
+    z[i+1, 0, 0] = z[i, 0, 0] + dt * dz
     
-    rho = getObservation(x, v, a) + z[i, 0, :]
+    rho[0,:-1] = getObservation(x, v, a) + z[i, 0, :]
     
     # prediction errors (only used for plotting)
     eps_z = y - g_gm(mu_x[:, :-1], mu_v)
@@ -234,14 +236,15 @@ for i in range(iterations - 1):
     
     ### minimise free energy ###
     # perception
-    Dmu_x[0, :-1] = mu_x[0, 1:]
-#    dFdmu_x[0, :-1] = np.array([mu_pi_z * - (rho - mu_x[0, :-1]) + mu_pi_w * alpha * [mu_x[0, 1:] + alpha * mu_x[0, :-1] - eta]])
-#    dFdmu_x[0, 1:] += np.squeeze(mu_pi_w * [mu_x[0, :-1] + alpha * mu_x[0, :-1] - eta])
+#    Dmu_x[0, :-1] = mu_x[0, 1:]
+    Dmu_x = mode_path(mu_x)
+    dFdmu_x[0, :-1] = np.array([mu_pi_z * - (rho[0, :-1] - mu_x[0, :-1]) + mu_pi_w * alpha * [mu_x[0, 1:] + alpha * mu_x[0, :-1] - eta]])
+    dFdmu_x[0, 1:] += np.squeeze(mu_pi_w * [mu_x[0, :-1] + alpha * mu_x[0, :-1] - eta])
     
-    dFdmu_x = dFdmu_states(rho, mu_x, mu_gamma_z, mu_pi_w)
+#    dFdmu_x = dFdmu_states(rho, mu_x, mu_gamma_z, mu_pi_w)
     
     # action
-    dFda = np.array([0., np.sum(mu_pi_z * (rho - mu_x[0, :-1])), 0.])
+    dFda = np.array([0., np.sum(mu_pi_z * (rho[0, :-1] - mu_x[0, :-1])), 0.])
     
     # attention
 #    dFdmu_gamma_z = .5 * (np.exp(mu_gamma_z) * (rho - mu_x[0, :-1])**2 - 1)
@@ -253,13 +256,20 @@ for i in range(iterations - 1):
 #    mu_x += dt * (Dmu_x - k_mu_x * dFdmu_x)
     
     # Local Linearisation
-    jac = jac_dFdmu_states(rho, mu_x, mu_gamma_z, mu_pi_w)
-    cc = update_states(rho, mu_x, mu_gamma_z, mu_pi_w)
-    ccc = mode_path(mu_x)
-    cccc = np.dot(mu_x, np.eye(temp_orders_states, k=1))
-    aa = (np.exp(dt * jac) - np.identity(temp_orders_states))
-    delta_mu_x = (np.exp(dt * jac) - np.identity(temp_orders_states)) / jac * (Dmu_x - k_mu_x * dFdmu_x)
-    mu_x += delta_mu_x
+    jac = np.squeeze(jac_dFdmu_states(rho, mu_x, mu_gamma_z, mu_pi_w))
+    jac_nozeros = jac[:-1,:-1]
+    try:
+        jac_inv = np.linalg.inv(jac_nozeros)
+        delta_mu_x = np.dot(np.dot(np.exp(dt * jac_nozeros) - np.identity(temp_orders_states-1), jac_inv), (Dmu_x[0, :-1] - k_mu_x * dFdmu_x[0, :-1]).transpose()).transpose()
+    except np.linalg.LinAlgError:
+        # Not invertible. Skip this one.
+        print('Error')
+        delta_mu_x = dt * (Dmu_x[0, :-1] - k_mu_x * dFdmu_x[0, :-1]).transpose()
+#    jac = np.squeeze(jac_dFdmu_states(rho, mu_x, mu_gamma_z, mu_pi_w))
+#    jac_nozeros = jac[:-1,:-1]
+#    jac_inv = np.linalg.inv(jac_nozeros)
+#    delta_mu_x = np.dot(np.dot(np.exp(dt * jac_nozeros) - np.identity(temp_orders_states-1), jac_inv), (Dmu_x[0, :-1] - k_mu_x * dFdmu_x[0, :-1]).transpose()).transpose()
+    mu_x[0, :-1] += delta_mu_x
     
 #    a += dt * - k_a * dFda
     if i == T_swith/dt:
@@ -279,7 +289,7 @@ for i in range(iterations - 1):
     
     
     # save history
-    rho_history[i, :] = rho
+    rho_history[i, :] = rho[:, :-1]
     mu_x_history[i, :, :] = mu_x
     eta_history[i] = eta
     a_history[i] = a
@@ -316,25 +326,25 @@ plt.ylabel('Velocity (km/h)')
 #plt.plot(range(iterations-1), mu_x_history[:-1,0,1])
 #plt.plot(range(iterations-1), eta_history[:-1,0,1])
 
-plt.figure()
-plt.title('Action')
-plt.plot(range(iterations-1), a_history[:-1,1])
-
-plt.figure()
-plt.title('Gains')
-plt.plot(range(iterations-1), mu_gamma_z_history[:-1, 0])
-
-plt.figure()
-plt.title('dFdmu_gamma_z')
-plt.plot(range(iterations-1), dFdmu_gamma_z_history[:-1, 0])
-
-plt.figure()
-plt.title('Phi')
-plt.plot(range(iterations-1), phi_history[:-1, 0])
-
-plt.figure()
-plt.title('Mu_pi_z')
-plt.plot(range(iterations-1), mu_pi_z_history[:-1, 0])
+#plt.figure()
+#plt.title('Action')
+#plt.plot(range(iterations-1), a_history[:-1,1])
+#
+#plt.figure()
+#plt.title('Gains')
+#plt.plot(range(iterations-1), mu_gamma_z_history[:-1, 0])
+#
+#plt.figure()
+#plt.title('dFdmu_gamma_z')
+#plt.plot(range(iterations-1), dFdmu_gamma_z_history[:-1, 0])
+#
+#plt.figure()
+#plt.title('Phi')
+#plt.plot(range(iterations-1), phi_history[:-1, 0])
+#
+#plt.figure()
+#plt.title('Mu_pi_z')
+#plt.plot(range(iterations-1), mu_pi_z_history[:-1, 0])
 
 
 
