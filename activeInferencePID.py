@@ -14,9 +14,9 @@ since standard cruise control problems do not usually adopt the D-term.
 import numpy as np
 import matplotlib.pyplot as plt
 
-dt = .01
-T = 200
-T_swith = int(T)
+dt = .0001
+T = 100
+T_swith = int(T/5)
 iterations = int(T / dt)
 alpha = 100000.                                              # drift in Generative Model
 gamma = 1                                                   # drift in OU process
@@ -55,7 +55,7 @@ v = np.zeros((hidden_causes, temp_orders_states - 1))
 y = np.zeros((obs_states, temp_orders_states - 1))
 eta = np.zeros((hidden_causes, temp_orders_states - 1))
 
-eta[0, 0] = 10*alpha                                         # desired velocity 
+eta[0, 0] = 10*alpha                                         # desired velocity , 0 to avoid mischaracterisation of precision from the start (large initial fluctuation is similar to large variance)
 
 
 
@@ -106,7 +106,7 @@ for i in range(hidden_states):
 # agent's estimates of the noise (agent - generative model)
 #mu_gamma_z = -16 * np.ones((obs_states, temp_orders_states - 1))  # log-precisions
 #mu_gamma_z[0, 0] = -8
-mu_gamma_z = 2 * np.ones((obs_states, temp_orders_states - 1))    # log-precisions
+mu_gamma_z = 0.0 * np.ones((obs_states, temp_orders_states - 1))    # log-precisions
 mu_gamma_z[0, 1] = mu_gamma_z[0, 0] - np.log(2 * gamma)
 mu_pi_z = np.exp(mu_gamma_z) * np.ones((obs_states, temp_orders_states - 1))
 mu_gamma_w = -19 * np.ones((obs_states, temp_orders_states - 1))   # log-precision
@@ -182,6 +182,10 @@ def getObservation(x, v, a, w):
     x[:, 0] += dt * x[:, 1]
     return g(x[:, :-1], v)
 
+def F(rho, mu_x, mu_gamma_z, mu_pi_w):
+    return .5 * (np.sum(np.exp(mu_gamma_z) * (rho - mu_x[0, :-1])**2) +
+                 np.sum(mu_pi_w * (mu_x[0, 1:] + alpha * (mu_x[0, :-1] - eta))**2) -
+                 np.log(np.prod(np.exp(mu_gamma_z)) * np.prod(mu_pi_w)))
 
 
 for i in range(iterations - 1):
@@ -204,13 +208,14 @@ for i in range(iterations - 1):
     
     
     # Analytical noise, for one extra level of generalised cooordinates, this is equivalent to an ornstein-uhlenbeck process
-    w[i, 0, 1] = - gamma * w[i, 0, 0] + w[i, 0, 1] / np.sqrt(dt)
-    z[i, 0, 1] = - gamma * z[i, 0, 0] + z[i, 0, 1] / np.sqrt(dt)
+    dw = - gamma * w[i, 0, 0] + w[i, 0, 1] / np.sqrt(dt)
+    dz = - gamma * z[i, 0, 0] + z[i, 0, 1] / np.sqrt(dt)
     
-    w[i+1, 0, 0] = w[i, 0, 0] + dt * (w[i, 0, 1])                               # noise in dynamics, at the moment not used in generative process
-    z[i+1, 0, 0] = z[i, 0, 0] + dt * (z[i, 0, 1])
+    w[i+1, 0, 0] = w[i, 0, 0] + dt * dw                               # noise in dynamics, at the moment not used in generative process
+    z[i+1, 0, 0] = z[i, 0, 0] + dt * dz
     
-    rho = getObservation(x, v, a, w) + z[i, 0, :]
+    y = getObservation(x, v, a, w)
+    rho = y + z[i, 0, :]
     
     # prediction errors (only used for plotting)
     eps_z = y - g_gm(mu_x[:, :-1], mu_v)
@@ -240,16 +245,20 @@ for i in range(iterations - 1):
 #        mu_pi_w = np.exp(mu_gamma_w) * np.ones((hidden_states, temp_orders_states - 1))
         
 #    if i == 2*T_swith/dt:
-#        mu_gamma_w[0, 0] = -19                                  # REALLY INTERERESTING, if this is too high then the observations start to oscillate since the switch that introduces desires generates a sudden prediction error, better a "weaker" desire
+#        mu_gamma_w[0, 0] = -18                                  # REALLY INTERERESTING, if this is too high then the observations start to oscillate since the switch that introduces desires generates a sudden prediction error, better a "weaker" desire
 #        mu_gamma_w[0, 1] = mu_gamma_w[0, 0] - np.log(2)
 #        mu_pi_w = np.exp(mu_gamma_w) * np.ones((hidden_states, temp_orders_states - 1))
         
         
     phi += dt * (- dFdmu_gamma_z - kappa * phi)
 #    mu_gamma_z += dt * k_mu_gamma_z * phi
-    mu_gamma_z[0,0] += dt * k_mu_gamma_z * phi[0,0]
-    if i > T_swith/dt:
-        a += dt * - k_a * dFda
+#    mu_gamma_z[0,0] += dt * k_mu_gamma_z * phi[0,0]
+#    if i > T_swith/dt:
+#        a += dt * - k_a * dFda
+#        kappa = 10
+#        mu_gamma_w = -18 * np.ones((obs_states, temp_orders_states - 1))   # log-precision
+#        mu_gamma_w[0, 1] = mu_gamma_w[0, 0] - np.log(2)
+#        mu_pi_w = np.exp(mu_gamma_w) * np.ones((hidden_states, temp_orders_states - 1))
     a += dt * - k_a * dFda
     
     # save history
@@ -262,7 +271,7 @@ for i in range(iterations - 1):
     
     xi_z_history[i, :, :] = xi_z
     xi_w_history[i, :, :] = xi_w
-    FE_history[i] = np.sum(xi_z) + np.sum(xi_w)
+    FE_history[i] = F(rho, mu_x, mu_gamma_z, mu_pi_w)
     
     phi_history[i] = phi
     dFdmu_gamma_z_history[i] = dFdmu_gamma_z
@@ -302,32 +311,35 @@ plt.figure()
 plt.title('Action')
 plt.plot(range(iterations-1), a_history[:-1,1])
 
-plt.figure()
-plt.title('Integral gain - Log-precision z0')
-plt.plot(range(iterations-1), mu_gamma_z_history[:-1, 0], 'r', label='Estimated precision')
-plt.axhline(y=gamma_z[0,0], xmin=0.0, xmax=T, color='b', label='Theoretical precision')
-plt.axhline(y=-np.log(np.var(rho_history[int(T/(4*dt)):-1,0,0])), xmin=0.0, xmax=T, color='g', label='Measured precision')
-plt.legend()
+#plt.figure()
+#plt.title('Integral gain - Log-precision z0')
+#plt.plot(range(iterations-1), mu_gamma_z_history[:-1, 0], 'r', label='Estimated precision')
+#plt.axhline(y=gamma_z[0,0], xmin=0.0, xmax=T, color='b', label='Theoretical precision')
+#plt.axhline(y=-np.log(np.var(rho_history[int(T/(4*dt)):-1,0,0])), xmin=0.0, xmax=T, color='g', label='Measured precision')
+#plt.legend()
+#
+#plt.figure()
+#plt.title('Proportional gain - Log-precision z1')
+#plt.plot(range(iterations-1), mu_gamma_z_history[:-1, 1], 'r', label='Estimated precision')
+#plt.axhline(y=gamma_z[0,1], xmin=0.0, xmax=T, color='b', label='Theoretical precision')
+#plt.axhline(y=-np.log(np.var(rho_history[int(T/(4*dt)):-1,0,1])), xmin=0.0, xmax=T, color='g', label='Measured precision')
+#plt.legend()
 
-plt.figure()
-plt.title('Proportional gain - Log-precision z1')
-plt.plot(range(iterations-1), mu_gamma_z_history[:-1, 1], 'r', label='Estimated precision')
-plt.axhline(y=gamma_z[0,1], xmin=0.0, xmax=T, color='b', label='Theoretical precision')
-plt.axhline(y=-np.log(np.var(rho_history[int(T/(4*dt)):-1,0,1])), xmin=0.0, xmax=T, color='g', label='Measured precision')
-plt.legend()
+#plt.figure()
+#plt.title('dFdmu_gamma_z')
+#plt.plot(range(iterations-1), dFdmu_gamma_z_history[:-1, 0])
+#
+#plt.figure()
+#plt.title('Phi')
+#plt.plot(range(iterations-1), phi_history[:-1, 0])
+#
+#plt.figure()
+#plt.title('Mu_pi_z')
+#plt.plot(range(iterations-1), mu_pi_z_history[:-1, 0])
 
-plt.figure()
-plt.title('dFdmu_gamma_z')
-plt.plot(range(iterations-1), dFdmu_gamma_z_history[:-1, 0])
-
-plt.figure()
-plt.title('Phi')
-plt.plot(range(iterations-1), phi_history[:-1, 0])
-
-plt.figure()
-plt.title('Mu_pi_z')
-plt.plot(range(iterations-1), mu_pi_z_history[:-1, 0])
-
+#plt.figure()
+#plt.title('Free energy')
+#plt.plot(np.arange(0, T-dt, dt), FE_history[:-1])
 
 
 
