@@ -271,21 +271,21 @@ for i in range(iterations - 1):
 #    delta_mu_x = np.dot(np.dot(np.exp(dt * jac_nozeros) - np.identity(temp_orders_states-1), jac_inv), (Dmu_x[0, :-1] - k_mu_x * dFdmu_x[0, :-1]).transpose()).transpose()
     mu_x[0, :-1] += delta_mu_x
     
-#    a += dt * - k_a * dFda
-    if i == T_swith/dt:
-        mu_x[0, :] = np.zeros((hidden_states, temp_orders_states))
-        x = np.zeros((hidden_states, temp_orders_states))
-        v = np.zeros((hidden_states, temp_orders_states - 1))
-        mu_gamma_w[0, 0] = -19
-        mu_gamma_w[0, 1] = mu_gamma_w[0, 0] - np.log(2)
-        mu_pi_w = np.exp(mu_gamma_w) * np.ones((hidden_states, temp_orders_states - 1))
-    
-    if i > T_swith/dt:
-        a += dt * - k_a * dFda
-    else:
-        phi += dt * (- dFdmu_gamma_z - kappa * phi)
-        #mu_gamma_z += dt * k_mu_gamma_z * phi
-        mu_gamma_z[0,0] += dt * k_mu_gamma_z * phi[0,0]
+    a += dt * - k_a * dFda
+#    if i == T_swith/dt:
+#        mu_x[0, :] = np.zeros((hidden_states, temp_orders_states))
+#        x = np.zeros((hidden_states, temp_orders_states))
+#        v = np.zeros((hidden_states, temp_orders_states - 1))
+#        mu_gamma_w[0, 0] = -19
+#        mu_gamma_w[0, 1] = mu_gamma_w[0, 0] - np.log(2)
+#        mu_pi_w = np.exp(mu_gamma_w) * np.ones((hidden_states, temp_orders_states - 1))
+#    
+#    if i > T_swith/dt:
+#        a += dt * - k_a * dFda
+#    else:
+#        phi += dt * (- dFdmu_gamma_z - kappa * phi)
+#        #mu_gamma_z += dt * k_mu_gamma_z * phi
+#        mu_gamma_z[0,0] += dt * k_mu_gamma_z * phi[0,0]
     
     
     # save history
