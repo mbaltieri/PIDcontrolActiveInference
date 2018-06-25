@@ -15,7 +15,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 dt = .01
-T = 1500
+T = 500
 T_swith = int(T/3)
 iterations = int(T / dt)
 alpha = 100000.                                              # drift in Generative Model
@@ -80,7 +80,7 @@ k_mu_x = 1                                                  # learning rate perc
 k_a = 1                                                     # learning rate action
 k_mu_gamma_z = 1                                            # learning rate attention
 k_mu_gamma_w = 1                                            # learning rate attention
-kappa_z = 100                                                 # damping on precisions minimisation
+kappa_z = 10                                                 # damping on precisions minimisation
 kappa_w = 50                                                 # damping on precisions minimisation
 
 # noise on sensory input (world - generative process)
@@ -265,8 +265,8 @@ for i in range(iterations - 1):
     phi += dt * (- dFdmu_gamma_z - kappa_z * phi)
     psi += dt * (- dFdmu_gamma_w - kappa_w * psi)
     
-#    mu_gamma_z += dt * k_mu_gamma_z * phi
-    mu_gamma_w += dt * k_mu_gamma_w * psi
+    mu_gamma_z += dt * k_mu_gamma_z * phi
+#    mu_gamma_w += dt * k_mu_gamma_w * psi
     
 #    mu_gamma_z[0,0] += dt * k_mu_gamma_z * phi[0,0]
 #    mu_gamma_z[0,1] += dt * k_mu_gamma_z * phi[0,1]
@@ -344,19 +344,19 @@ plt.plot(range(iterations-1), a_history[:-1,1])
 
 print(np.var(rho_history[int(T/(4*dt)):-1,0,0]))
 
-#plt.figure()
-#plt.title('Integral gain - Log-precision z0')
-#plt.plot(range(iterations-1), mu_gamma_z_history[:-1, 0], 'r', label='Estimated precision')
-#plt.axhline(y=gamma_z[0,0], xmin=0.0, xmax=T, color='b', label='Theoretical precision')
-#plt.axhline(y=-np.log(np.var(rho_history[int(T/(4*dt)):-1,0,0])), xmin=0.0, xmax=T, color='g', label='Measured precision')
-#plt.legend()
-#
-#plt.figure()
-#plt.title('Proportional gain - Log-precision z1')
-#plt.plot(range(iterations-1), mu_gamma_z_history[:-1, 1], 'r', label='Estimated precision')
-#plt.axhline(y=gamma_z[0,1], xmin=0.0, xmax=T, color='b', label='Theoretical precision')
-#plt.axhline(y=-np.log(np.var(rho_history[int(T/(4*dt)):-1,0,1])), xmin=0.0, xmax=T, color='g', label='Measured precision')
-#plt.legend()
+plt.figure()
+plt.title('Integral gain - Log-precision z0')
+plt.plot(range(iterations-1), mu_gamma_z_history[:-1, 0], 'r', label='Estimated precision')
+plt.axhline(y=gamma_z[0,0], xmin=0.0, xmax=T, color='b', label='Theoretical precision')
+plt.axhline(y=-np.log(np.var(rho_history[int(T/(4*dt)):-1,0,0])), xmin=0.0, xmax=T, color='g', label='Measured precision')
+plt.legend()
+
+plt.figure()
+plt.title('Proportional gain - Log-precision z1')
+plt.plot(range(iterations-1), mu_gamma_z_history[:-1, 1], 'r', label='Estimated precision')
+plt.axhline(y=gamma_z[0,1], xmin=0.0, xmax=T, color='b', label='Theoretical precision')
+plt.axhline(y=-np.log(np.var(rho_history[int(T/(4*dt)):-1,0,1])), xmin=0.0, xmax=T, color='g', label='Measured precision')
+plt.legend()
 
 plt.figure()
 plt.title('Log-precision w0')
@@ -380,13 +380,13 @@ plt.legend()
 #plt.title('Phi')
 #plt.plot(range(iterations-1), phi_history[:-1, 0])
 
-#plt.figure()
-#plt.title('Mu_pi_z0')
-#plt.plot(range(iterations-1), mu_pi_z_history[:-1, 0])
-#
-#plt.figure()
-#plt.title('Mu_pi_z1')
-#plt.plot(range(iterations-1), mu_pi_z_history[:-1, 1])
+plt.figure()
+plt.title('Mu_pi_z0')
+plt.plot(range(iterations-1), mu_pi_z_history[:-1, 0])
+
+plt.figure()
+plt.title('Mu_pi_z1')
+plt.plot(range(iterations-1), mu_pi_z_history[:-1, 1])
 
 plt.figure()
 plt.title('Mu_pi_w0')
