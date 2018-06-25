@@ -11,7 +11,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 dt = .01
-T = 40
+T = 100
 iterations = int(T/dt)
 
 variables = 1
@@ -26,26 +26,29 @@ rho = 1.3                                   # air density
 A = 2.4                                     # frontal area agent
 
 # agent's parameters
-m = 1000                                    # car mass
+m = 100                                    # car mass
 T_m = 190                                   # maximum torque
 omega_m = 420                               # engine speed to reach T_m
 alpha_n = 12                                # = gear ration/wheel radius, a1 = 40, a2 = 25, a3 = 16, a4 = 12, a5 = 10
 beta = .4
 
 x = np.zeros((variables,temp_orders))       # hidden state (made observable to simplify things, y = x), x[0]=v x[1]=v_dot
+y = np.zeros((variables,temp_orders))       # measured state
 u = 0                                       # input
 v = np.zeros((variables,temp_orders))       # z[0]: error, z[1]: integral of the error
 
-n = 1*np.random.randn(1,iterations)
+n = np.random.randn(iterations,temp_orders)
+n[:,1] *= np.sqrt(2)
 
-k_p = 1.0
-k_i = 5.0
+k_p = 0.5
+k_i = 10.0
 
-v_ref = 20
+v_ref = 10
 
 ext_input = np.zeros((1, iterations))
 
 # history
+y_history = np.zeros((iterations,variables,temp_orders))
 x_history = np.zeros((iterations,variables,temp_orders))
 u_history = np.zeros((iterations,1))
 v_history = np.zeros((iterations,variables,temp_orders))
@@ -76,22 +79,33 @@ def omega(v):
     return alpha_n*v
     
     
-for i in range(iterations):
+for i in range(iterations-1):
     print(i)
     
-    v[0,1] = x[0,0] - v_ref
-    v[0,0] += dt*v[0,1]
+    dn = - 1.0 * n[i, 0] + n[i, 1] / np.sqrt(dt)
+    n[i+1, 0] = n[i, 0] + dt * dn
     
-    u = k_p*v[0,1] + k_i*v[0,0]
+#    v[0,1] = y[0,0] - v_ref
+#    v[0,0] += dt*v[0,1]
+#    
+#    u = k_p*v[0,1] + k_i*v[0,0]
+    
+    v[0,1] = y[0,1] - 0.0
+    v[0,0] = y[0,0] - v_ref
+    
+    u += dt*(k_p*v[0,1] + k_i*v[0,0])
     
     ext_input[0,i] = .01*np.exp((i+iterations/2)*dt**1.3)
-    if (i>iterations/4) and (i<iterations/2):
-        x[0,1] = (force_drive(x[0,0],-u) - force_disturbance(x[0,0],theta))/m + n[0,i] + ext_input[0,i]
-    else:
-        x[0,1] = (force_drive(x[0,0],-u) - force_disturbance(x[0,0],theta))/m + n[0,i]
+    x[0,1] = (force_drive(x[0,0],-u) - force_disturbance(x[0,0],theta))/m
+#    if (i>iterations/4) and (i<iterations/2):
+#        x[0,1] = (force_drive(x[0,0],-u) - force_disturbance(x[0,0],theta))/m + n[0,i] + ext_input[0,i]
+#    else:
+#        x[0,1] = (force_drive(x[0,0],-u) - force_disturbance(x[0,0],theta))/m + n[0,i]
     x[0,0] += dt*x[0,1]
+    y = x + n[i,:]
     
     # save data
+    y_history[i,:,:] = y
     x_history[i,:,:] = x
     u_history[i] = u
     v_history[i,:,:] = v
@@ -117,3 +131,11 @@ plt.title('Error integral')
 
 plt.figure()
 plt.plot(ext_input[0,int(iterations/4):int(iterations/2)])
+
+plt.figure()
+plt.plot(np.arange(0, T-dt, dt), y_history[:-1,0,0], 'b', np.arange(0, T-dt, dt), v_ref_history[:-1], 'k')
+
+plt.figure()
+plt.plot(np.arange(0, T-dt, dt), -u_history[:-1], 'g')
+
+print(np.var(y_history[int(T/(4*dt)):-1,0,0]))
