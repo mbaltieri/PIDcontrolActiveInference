@@ -41,7 +41,7 @@ n = np.random.randn(iterations,temp_orders)
 n[:,1] *= np.sqrt(2)
 
 k_p = 0.5
-k_i = 10.0
+k_i = 155.0
 
 v_ref = 10
 
