@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 
 dt = .01
 T = 500
-T_swith = int(T/3)
+T_switch = int(T/3)
 iterations = int(T / dt)
 alpha = 100000.                                              # drift in Generative Model
 gamma = 1                                                   # drift in OU process
@@ -80,7 +80,7 @@ k_mu_x = 1                                                  # learning rate perc
 k_a = 1                                                     # learning rate action
 k_mu_gamma_z = 1                                            # learning rate attention
 k_mu_gamma_w = 1                                            # learning rate attention
-kappa_z = 10                                                 # damping on precisions minimisation
+kappa_z = 100                                                 # damping on precisions minimisation
 kappa_w = 50                                                 # damping on precisions minimisation
 
 # noise on sensory input (world - generative process)
@@ -197,6 +197,7 @@ def F(rho, mu_x, mu_gamma_z, mu_pi_w):
                  np.sum(mu_pi_w * (mu_x[0, 1:] + alpha * (mu_x[0, :-1] - eta))**2) -
                  np.log(np.prod(np.exp(mu_gamma_z)) * np.prod(mu_pi_w)))
 
+mu_gamma_w_init = mu_gamma_w[0, 0]
 
 for i in range(iterations - 1):
     print(i)
@@ -251,12 +252,15 @@ for i in range(iterations - 1):
     # update equations
     mu_x += dt * (Dmu_x - k_mu_x * dFdmu_x)
 #    a += dt * - k_a * dFda
-#    if i == T_swith/dt:
-#        mu_gamma_w[0, 0] = -22                                  # REALLY INTERERESTING, if this is too high then the observations start to oscillate since the switch that introduces desires generates a sudden prediction error, better a "weaker" desire
-#        mu_gamma_w[0, 1] = mu_gamma_w[0, 0] - np.log(2)
+#    if i >= T_switch/dt:
+##        mu_gamma_w[0, 0] = -21                                  # REALLY INTERERESTING, if this is too high then the observations start to oscillate since the switch that introduces desires generates a sudden prediction error, better a "weaker" desire
+##        print(i*dt - T_switch)
+##        v_history[i] = np.tanh(i*dt - T_switch)
+#        mu_gamma_w[0, 0] = mu_gamma_w_init + np.tanh(.5*dt*(i*dt - T_switch))
+##        mu_gamma_w[0, 1] = mu_gamma_w[0, 0] - np.log(2)
 #        mu_pi_w = np.exp(mu_gamma_w) * np.ones((hidden_states, temp_orders_states - 1))
         
-#    if i == 2*T_swith/dt:
+#    if i == 2*T_switch/dt:
 #        mu_gamma_w[0, 0] = -18                                  # REALLY INTERERESTING, if this is too high then the observations start to oscillate since the switch that introduces desires generates a sudden prediction error, better a "weaker" desire
 #        mu_gamma_w[0, 1] = mu_gamma_w[0, 0] - np.log(2)
 #        mu_pi_w = np.exp(mu_gamma_w) * np.ones((hidden_states, temp_orders_states - 1))
@@ -268,9 +272,19 @@ for i in range(iterations - 1):
     mu_gamma_z += dt * k_mu_gamma_z * phi
 #    mu_gamma_w += dt * k_mu_gamma_w * psi
     
+    if i <= T_switch/dt:
+#        mu_gamma_z += dt * k_mu_gamma_z * phi
+        ac = 1
+    else:
+#        mu_gamma_w[0, 0] = mu_gamma_w_init + np.tanh(.5*dt*(i*dt - T_switch))
+#        mu_gamma_w[0, 1] = mu_gamma_w[0, 0] - np.log(2)
+        mu_gamma_w[0, 0] = -20
+        mu_gamma_w[0, 1] = mu_gamma_w[0, 0] - np.log(2)
+        mu_pi_w = np.exp(mu_gamma_w) * np.ones((hidden_states, temp_orders_states - 1))
+    
 #    mu_gamma_z[0,0] += dt * k_mu_gamma_z * phi[0,0]
 #    mu_gamma_z[0,1] += dt * k_mu_gamma_z * phi[0,1]
-#    if i > T_swith/dt:
+#    if i > T_switch/dt:
 #        mu_gamma_z += dt * k_mu_gamma_z * phi
 #        a += dt * - k_a * dFda
 #        kappa_z = 10
@@ -318,9 +332,9 @@ plt.ylabel('Velocity (km/h)')
 plt.legend()
 
 #plt.figure()
-#plt.plot(np.arange(T_swith, T-dt, dt), rho_history[int(T_swith/dt):-1,0,0], 'b', label='Measured velocity')
-#plt.plot(np.arange(T_swith, T-dt, dt), mu_x_history[int(T_swith/dt):-1,0,0], 'r', label='Estimated velocity')
-#plt.plot(np.arange(T_swith, T-dt, dt), eta_history[int(T_swith/dt):-1,0,0], 'g', label='Desired velocity')
+#plt.plot(np.arange(T_switch, T-dt, dt), rho_history[int(T_switch/dt):-1,0,0], 'b', label='Measured velocity')
+#plt.plot(np.arange(T_switch, T-dt, dt), mu_x_history[int(T_switch/dt):-1,0,0], 'r', label='Estimated velocity')
+#plt.plot(np.arange(T_switch, T-dt, dt), eta_history[int(T_switch/dt):-1,0,0], 'g', label='Desired velocity')
 #plt.title('Car velocity')
 #plt.xlabel('Time (s)')
 #plt.ylabel('Velocity (km/h)')
