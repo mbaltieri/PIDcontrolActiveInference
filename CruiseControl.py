@@ -41,7 +41,7 @@ n = np.random.randn(iterations,temp_orders)
 n[:,1] *= np.sqrt(2)
 
 k_p = 0.5
-k_i = 155.0
+k_i = 15.0
 
 v_ref = 10
 
@@ -95,7 +95,7 @@ for i in range(iterations-1):
     
     u += dt*(k_p*v[0,1] + k_i*v[0,0])
     
-    ext_input[0,i] = .01*np.exp((i+iterations/2)*dt**1.3)
+#    ext_input[0,i] = .01*np.exp((i+iterations/2)*dt**1.3)
     x[0,1] = (force_drive(x[0,0],-u) - force_disturbance(x[0,0],theta))/m
 #    if (i>iterations/4) and (i<iterations/2):
 #        x[0,1] = (force_drive(x[0,0],-u) - force_disturbance(x[0,0],theta))/m + n[0,i] + ext_input[0,i]
