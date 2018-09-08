@@ -29,7 +29,7 @@ plt.rc('legend', fontsize=SMALL_SIZE)    # legend fontsize
 plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
 
 
-simulation = 7
+simulation = 4
 
 # 0: PID control as active inference
 # 1: PID tuning based on means of observation errors
@@ -47,7 +47,7 @@ if simulation == 0:
 elif simulation == 1:
     T = 1000
 elif simulation == 2:
-    T = 3000
+    T = 1500
 elif simulation == 3:
     T = 50
 elif simulation == 4:
@@ -55,7 +55,7 @@ elif simulation == 4:
 elif simulation == 5:
     T = 1000
 elif simulation == 6:
-    T = 150
+    T = 1500
 elif simulation == 7:
     T = 1000
 elif simulation == 8:
@@ -170,8 +170,8 @@ mu_gamma_z[0, 1] = mu_gamma_z[0, 0] - np.log(2 * gamma)
 #mu_gamma_z[0, 1] = -0.7
 mu_pi_z = np.exp(mu_gamma_z) * np.ones((obs_states, temp_orders_states - 1))
 if simulation == 4:
-    mu_gamma_w = - 23 * np.ones((hidden_states, temp_orders_states - 1))   # log-precision
-    mu_gamma_w = - 20 * np.ones((hidden_states, temp_orders_states - 1))   # log-precision
+    mu_gamma_w = - 24 * np.ones((hidden_states, temp_orders_states - 1))   # log-precision
+    mu_gamma_w = - 19 * np.ones((hidden_states, temp_orders_states - 1))   # log-precision
 else:
     mu_gamma_w = - 20 * np.ones((hidden_states, temp_orders_states - 1))   # log-precision
 mu_gamma_w[0, 1] = mu_gamma_w[0, 0] - np.log(2)
@@ -341,10 +341,11 @@ for i in range(iterations - 1):
     
     if simulation == 2 and (i > iterations/3):
         mu_gamma_z += dt * k_mu_gamma_z * phi
-        kappa_z = 50 * np.tanh((i - iterations/3)/(50*T))+10
-        kappa_z_history[i] = kappa_z
-        if i > 2*iterations/3:
-             mu_gamma_gamma_z = 5 * np.ones((obs_states, temp_orders_states - 1))
+        if i > iterations/3 + iterations/16:
+            kappa_z = 50 * np.tanh((i - iterations/3 - iterations/16)/(50*T))+10
+            kappa_z_history[i] = kappa_z
+            if i > 2*iterations/3:
+                 mu_gamma_gamma_z = 5 * np.ones((obs_states, temp_orders_states - 1))
     
     if simulation == 5:
         mu_gamma_z += dt * k_mu_gamma_z * phi
@@ -367,11 +368,11 @@ for i in range(iterations - 1):
     if simulation == 6:
         mu_gamma_w += dt * k_mu_gamma_w * psi
         if i > iterations/8:
-            kappa_w = 70 * np.tanh((i - iterations/8)/(70*T))+10
+            kappa_w = 50 * np.tanh((i - iterations/8)/(50*T))+10
             kappa_w_history[i] = kappa_w
             
             if i == int(iterations/2):
-#                mu_gamma_gamma_w = 4 * np.ones((obs_states, temp_orders_states - 1))         # uncomment or comment to get a prior or just follow the changing model uncertainty
+                mu_gamma_gamma_w = 4 * np.ones((obs_states, temp_orders_states - 1))         # uncomment or comment to get a prior or just follow the changing model uncertainty
                 
                 gamma_w = - 4 * np.ones((hidden_states, temp_orders_states - 1))    # log-precisions
                 gamma_w[:,1] = gamma_w[:,0] - np.log(2 * gamma)
@@ -475,7 +476,6 @@ plt.xlabel('Time ($s$)')
 plt.ylabel('Acceleration ($km/h^2$)')
 if simulation == 0:
     plt.savefig("figures/activeInferencePID_c.pdf")
-    plt.xlabel('Time ($s$)')
 elif simulation == 1:
     plt.savefig("figures/activeInferencePIDTuning_c.pdf")
 elif simulation == 2:
@@ -496,7 +496,6 @@ plt.xlabel('Time ($s$)')
 plt.ylabel('Acceleration ($km/h^2$)')
 if simulation == 0:
     plt.savefig("figures/activeInferencePID_d.pdf")
-    plt.xlabel('Time ($s$)')
 elif simulation == 1:
     plt.savefig("figures/activeInferencePIDTuning_d.pdf")
 elif simulation == 2:
@@ -504,6 +503,7 @@ elif simulation == 2:
 elif simulation == 3:
     plt.savefig("figures/activeInferencePIDLoad_d.pdf")
 elif simulation == 4:
+    plt.ylim((-1., 0.5))
     plt.savefig("figures/activeInferencePIDSetPoint_d.pdf")
 elif simulation == 5:
     plt.savefig("figures/activeInferencePIDMeasurementNoise_d.pdf")
@@ -524,18 +524,15 @@ if simulation == 1 or simulation == 2 or simulation == 5:
     plt.title('Log-precision, $\gamma_z$ (= integral gain, $k_i$)')
     plt.plot(np.arange(0, T-dt, dt), mu_gamma_z_history[:-1, 0], 'r', label='Estimated log-precision, $\mu_{\gamma_z}$')
     plt.plot(np.arange(0, T-dt, dt), gamma_z_history[:-1, 0], 'b', label='Real log-precision, $\gamma_z$')
+    plt.plot(np.arange(0, T-dt, dt), eta_gamma_z_history[:-1, 0, 0], 'g', label='Prior precision, $\eta_{\gamma_z}$')
 #    plt.axhline(y=-np.log(np.var(rho_history[int(T/(4*dt)):-1,0,0])), xmin=0.0, xmax=T, color='g', label='Measured precision')
     plt.xlabel('Time ($s$)')
+    plt.legend(loc=1)
     if simulation == 1:
-        plt.legend(loc=1)
         plt.savefig("figures/activeInferencePIDTuning_e.pdf")
     if simulation == 2:
-        plt.plot(np.arange(0, T-dt, dt), eta_gamma_z_history[:-1, 0, 0], 'g', label='Prior precision, $\eta_{\gamma_z}$')
-        plt.legend(loc=1)
         plt.savefig("figures/activeInferencePIDTuningHyperPriors_e.pdf")
     if simulation == 5:
-        plt.plot(np.arange(0, T-dt, dt), eta_gamma_z_history[:-1, 0, 0], 'g', label='Prior precision, $\eta_{\gamma_z}$')
-        plt.legend(loc=1)
         plt.savefig("figures/activeInferencePIDMeasurementNoise_e.pdf")
     
     
@@ -544,18 +541,14 @@ if simulation == 1 or simulation == 2 or simulation == 5:
     plt.title('Log-precision, $\gamma_{z\'}$ (= integral gain, $k_p$)')
     plt.plot(np.arange(0, T-dt, dt), mu_gamma_z_history[:-1, 1], 'r', label='Expected log-precision, $\mu_{\gamma_{z\'}}$')
     plt.plot(np.arange(0, T-dt, dt), gamma_z_history[:-1, 1], 'b', label='Real log-precision, $\gamma_{z\'}$')
+    plt.plot(np.arange(0, T-dt, dt), eta_gamma_z_history[:-1, 0, 1], 'g', label='Prior precision, $\eta_{\gamma_{z\'}}$')
 #    plt.axhline(y=-np.log(np.var(rho_history[int(T/(4*dt)):-1,0,1])), xmin=0.0, xmax=T, color='g', label='Measured precision')
     plt.xlabel('Time ($s$)')
     if simulation == 1:
-        plt.legend(loc=1)
         plt.savefig("figures/activeInferencePIDTuning_f.pdf")
     if simulation == 2:
-        plt.plot(np.arange(0, T-dt, dt), eta_gamma_z_history[:-1, 0, 1], 'g', label='Prior precision, $\eta_{\gamma_{z\'}}$')
-        plt.legend(loc=1)
         plt.savefig("figures/activeInferencePIDTuningHyperPriors_f.pdf")
     if simulation == 5:
-        plt.plot(np.arange(0, T-dt, dt), eta_gamma_z_history[:-1, 0, 1], 'g', label='Prior precision, $\eta_{\gamma_{z\'}}$')
-        plt.legend(loc=1)
         plt.savefig("figures/activeInferencePIDMeasurementNoise_f.pdf")
     
 if simulation == 6:
@@ -612,24 +605,24 @@ if simulation == 6:
 
 
 
-plt.figure(figsize=(9, 6))
-plt.title('Log-precision, $\gamma_w$')
-plt.plot(np.arange(0, T-dt, dt), mu_gamma_w_history[:-1, 0], 'r', label='Estimated log-precision, $\mu_{\gamma_w}$')
-#    plt.plot(np.arange(0, T-dt, dt), gamma_w_history[:-1, 0], 'b', label='Real log-precision, $\gamma_w$')
-#plt.axhline(y=-np.log(np.var(rho_history[int(T/(4*dt)):-1,0,0])), xmin=0.0, xmax=T, color='g', label='Measured precision')
-plt.plot(np.arange(0, T-dt, dt), eta_gamma_w_history[:-1, 0, 0], 'g', label='Prior precision, $\eta_{\gamma_{w\'}}$')
-plt.xlabel('Time ($s$)')
-plt.legend()
-plt.savefig("figures/activeInferencePIDModelUncertainty_e.pdf")
-
-plt.figure(figsize=(9, 6))
-plt.title('Log-precision,, $\gamma_{w\'}$')
-plt.plot(np.arange(0, T-dt, dt), mu_gamma_w_history[:-1, 1], 'r', label='Expected log-precision, $\mu_{\gamma_{w\'}}$')
-#    plt.plot(np.arange(0, T-dt, dt), gamma_w_history[:-1, 1], 'b', label='Real log-precision, $\gamma_{w\'}$')
-#plt.axhline(y=-np.log(np.var(rho_history[int(T/(4*dt)):-1,0,1])), xmin=0.0, xmax=T, color='g', label='Measured precision')
-plt.plot(np.arange(0, T-dt, dt), eta_gamma_w_history[:-1, 0, 1], 'g', label='Prior precision, $\eta_{\gamma_{w\'}}$')
-plt.xlabel('Time ($s$)')
-plt.legend()
-plt.savefig("figures/activeInferencePIDModelUncertainty_f.pdf")
+#plt.figure(figsize=(9, 6))
+#plt.title('Log-precision, $\gamma_w$')
+#plt.plot(np.arange(0, T-dt, dt), mu_gamma_w_history[:-1, 0], 'r', label='Estimated log-precision, $\mu_{\gamma_w}$')
+##    plt.plot(np.arange(0, T-dt, dt), gamma_w_history[:-1, 0], 'b', label='Real log-precision, $\gamma_w$')
+##plt.axhline(y=-np.log(np.var(rho_history[int(T/(4*dt)):-1,0,0])), xmin=0.0, xmax=T, color='g', label='Measured precision')
+#plt.plot(np.arange(0, T-dt, dt), eta_gamma_w_history[:-1, 0, 0], 'g', label='Prior precision, $\eta_{\gamma_{w\'}}$')
+#plt.xlabel('Time ($s$)')
+#plt.legend()
+#plt.savefig("figures/activeInferencePIDModelUncertainty_e.pdf")
+#
+#plt.figure(figsize=(9, 6))
+#plt.title('Log-precision,, $\gamma_{w\'}$')
+#plt.plot(np.arange(0, T-dt, dt), mu_gamma_w_history[:-1, 1], 'r', label='Expected log-precision, $\mu_{\gamma_{w\'}}$')
+##    plt.plot(np.arange(0, T-dt, dt), gamma_w_history[:-1, 1], 'b', label='Real log-precision, $\gamma_{w\'}$')
+##plt.axhline(y=-np.log(np.var(rho_history[int(T/(4*dt)):-1,0,1])), xmin=0.0, xmax=T, color='g', label='Measured precision')
+#plt.plot(np.arange(0, T-dt, dt), eta_gamma_w_history[:-1, 0, 1], 'g', label='Prior precision, $\eta_{\gamma_{w\'}}$')
+#plt.xlabel('Time ($s$)')
+#plt.legend()
+#plt.savefig("figures/activeInferencePIDModelUncertainty_f.pdf")
 
 
