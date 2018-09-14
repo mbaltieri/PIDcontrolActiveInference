@@ -45,7 +45,7 @@ dt = .05
 if simulation == 0:
     T = 50
 elif simulation == 1:
-    T = 600
+    T = 500
 elif simulation == 2:
     T = 600
 elif simulation == 3:
@@ -164,7 +164,7 @@ if simulation == 0 or simulation == 4:
 elif simulation == 3:
     mu_gamma_z = -2.5 * np.ones((obs_states, temp_orders_states - 1))    # log-precisions
 else:
-    mu_gamma_z = -4.0 * np.ones((obs_states, temp_orders_states - 1))    # log-precisions
+    mu_gamma_z = -2.0 * np.ones((obs_states, temp_orders_states - 1))    # log-precisions
 mu_gamma_z[0, 1] = mu_gamma_z[0, 0] - np.log(2 * gamma)
 #mu_gamma_z[0, 0] = 3.708050201
 #mu_gamma_z[0, 1] = -.6931471806
@@ -175,7 +175,7 @@ if simulation == 4:
     mu_gamma_w = - 24 * np.ones((hidden_states, temp_orders_states - 1))   # log-precision
     mu_gamma_w = - 19 * np.ones((hidden_states, temp_orders_states - 1))   # log-precision
 else:
-    mu_gamma_w = - 20 * np.ones((hidden_states, temp_orders_states - 1))   # log-precision
+    mu_gamma_w = - 22 * np.ones((hidden_states, temp_orders_states - 1))   # log-precision
 mu_gamma_w[0, 1] = mu_gamma_w[0, 0] - np.log(2)
 mu_pi_w = np.exp(mu_gamma_w) * np.ones((hidden_states, temp_orders_states - 1))
 
@@ -325,12 +325,11 @@ for i in range(iterations - 1):
     # action
     dFdy = mu_pi_z * (rho - mu_x[0, :-1])
     dyda = np.ones((obs_states, temp_orders_states-1))
-#    dyda = np.array([0., 1.])
     dFda = np.zeros((obs_states, temp_orders_states-1))
     dFda[0, 0] = np.sum(dFdy * dyda)
     
     # attention
-    dFdmu_gamma_z = .5 * (mu_pi_z * (rho - mu_x[0, :-1])**2 - 1)# + mu_p_gamma_z * (mu_gamma_z - eta_gamma_z)
+    dFdmu_gamma_z = .5 * (mu_pi_z * (rho - mu_x[0, :-1])**2 - 1) + mu_p_gamma_z * (mu_gamma_z - eta_gamma_z)
     dFdmu_gamma_w = .5 * (mu_pi_w * (mu_x[0, :-1] + alpha * mu_x[0, :-1] - eta_x)**2 - 1) + mu_p_gamma_w * (mu_gamma_w - eta_gamma_w)
     
     
@@ -353,7 +352,7 @@ for i in range(iterations - 1):
 #            kappa_z = 50 * np.tanh((i - iterations/3 - iterations/16)/(50*T))+10
             kappa_z_history[i] = kappa_z
             if i > 2*iterations/3:
-                 mu_gamma_gamma_z = 0 * np.ones((obs_states, temp_orders_states - 1))
+                 mu_gamma_gamma_z = 3 * np.ones((obs_states, temp_orders_states - 1))
     
     if simulation == 5:
         mu_gamma_z += dt * k_mu_gamma_z * phi
@@ -518,15 +517,15 @@ elif simulation == 5:
 elif simulation == 6:
     plt.savefig("figures/activeInferencePIDModelUncertainty_d.pdf")
 
-if simulation == 0 or simulation == 1:
+if simulation == 0:
     print(np.var(rho_history[int(T/4/dt):int(T/dt),0,0]))
-#elif simulation == 1 or simulation == 5 or simulation == 6 or simulation == 7:
-#    print(np.var(rho_history[int(T/4/dt):int(T/2/dt),0,0]))
-#    print(np.var(rho_history[int(T/2/dt+1):int(T/dt),0,0]))
-#elif simulation == 2 or simulation == 8:
-#    print(np.var(rho_history[int(T/6/dt):int(T/3/dt),0,0]))
-#    print(np.var(rho_history[int(T/3/dt+1):int(2*T/3/dt),0,0]))
-#    print(np.var(rho_history[int(2*T/3/dt+1):int(T/dt),0,0]))
+elif simulation == 1 or simulation == 5 or simulation == 6 or simulation == 7:
+    print(np.var(rho_history[int(T/4/dt):int(T/2/dt),0,0]))
+    print(np.var(rho_history[int(T/2/dt+1):int(T/dt),0,0]))
+elif simulation == 2 or simulation == 8:
+    print(np.var(rho_history[int(T/6/dt):int(T/3/dt),0,0]))
+    print(np.var(rho_history[int(T/3/dt+1):int(2*T/3/dt),0,0]))
+    print(np.var(rho_history[int(2*T/3/dt+1):int(T/dt),0,0]))
 
 if simulation == 1 or simulation == 2 or simulation == 5:
     plt.figure(figsize=(9, 6))
@@ -548,7 +547,7 @@ if simulation == 1 or simulation == 2 or simulation == 5:
     
     plt.figure(figsize=(9, 6))
 #    plt.ylim((-5., 7.))
-    plt.title('Log-precision, $\gamma_{z\'}$ (= integral gain, $k_p$)')
+    plt.title('Log-precision, $\gamma_{z\'}$ (= proportional gain, $k_p$)')
     plt.plot(np.arange(0, T-dt, dt), mu_gamma_z_history[:-1, 1], 'r', label='Expected log-precision, $\mu_{\gamma_{z\'}}$')
     plt.plot(np.arange(0, T-dt, dt), gamma_z_history[:-1, 1], 'b', label='Real log-precision, $\gamma_{z\'}$')
     plt.plot(np.arange(0, T-dt, dt), eta_gamma_z_history[:-1, 0, 1], 'g', label='Prior precision, $\eta_{\gamma_{z\'}}$')
@@ -598,8 +597,8 @@ if simulation == 6:
 #    plt.title('Mu_pi_z1')
 #    plt.plot(range(iterations-1), mu_pi_z_history[:-1, 1])
 #    
-plt.figure()
-plt.plot(kappa_z_history[:-1])
+#plt.figure()
+#plt.plot(kappa_z_history[:-1])
     #
     #plt.figure()
     #plt.title('Mu_pi_w0')
