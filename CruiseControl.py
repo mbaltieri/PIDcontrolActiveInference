@@ -37,7 +37,7 @@ y = np.zeros((variables,temp_orders))       # measured state
 u = 0                                       # input
 v = np.zeros((variables,temp_orders))       # z[0]: error, z[1]: integral of the error
 
-n = np.random.randn(iterations,temp_orders)
+n = np.random.randn(iterations,temp_orders+1)
 n[:,1] *= np.sqrt(2)
 
 k_p = 0.5
@@ -82,7 +82,10 @@ def omega(v):
 for i in range(iterations-1):
     print(i)
     
-    dn = - 1.0 * n[i, 0] + n[i, 1] / np.sqrt(dt)
+    dn2 = - 1.0 * n[i, 1] + n[i, 2] / np.sqrt(dt)
+    n[i+1, 1] = n[i, 1] + dt * dn2
+    
+    dn = - 1.0 * n[i, 0] + n[i, 1]
     n[i+1, 0] = n[i, 0] + dt * dn
     
 #    v[0,1] = y[0,0] - v_ref
@@ -102,7 +105,7 @@ for i in range(iterations-1):
 #    else:
 #        x[0,1] = (force_drive(x[0,0],-u) - force_disturbance(x[0,0],theta))/m + n[0,i]
     x[0,0] += dt*x[0,1]
-    y = x + n[i,:]
+    y = x + n[i,:-1]
     
     # save data
     y_history[i,:,:] = y
