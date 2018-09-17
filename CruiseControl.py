@@ -11,7 +11,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 dt = .01
-T = 100
+T = 10
 iterations = int(T/dt)
 
 variables = 1
@@ -41,7 +41,7 @@ n = np.random.randn(iterations,temp_orders+1)
 n[:,1] *= np.sqrt(2)
 
 k_p = 0.5
-k_i = 15.0
+k_i = 1.0
 
 v_ref = 10
 
@@ -51,11 +51,15 @@ ext_input = np.zeros((1, iterations))
 y_history = np.zeros((iterations,variables,temp_orders))
 x_history = np.zeros((iterations,variables,temp_orders))
 u_history = np.zeros((iterations,1))
+a_history = np.zeros((iterations,1))
 v_history = np.zeros((iterations,variables,temp_orders))
 
 v_ref_history = v_ref*np.ones((iterations))
 
 # functions
+
+def sigmoid(x):
+    return 1 / (1+np.exp(-x))
 
 def force_gravitation(theta):
     return m*g*np.sin(theta)
@@ -97,9 +101,10 @@ for i in range(iterations-1):
     v[0,0] = y[0,0] - v_ref
     
     u += dt*(k_p*v[0,1] + k_i*v[0,0])
+    a = sigmoid(u)
     
 #    ext_input[0,i] = .01*np.exp((i+iterations/2)*dt**1.3)
-    x[0,1] = (force_drive(x[0,0],-u) - force_disturbance(x[0,0],theta))/m
+    x[0,1] = (force_drive(x[0,0],-a) - force_disturbance(x[0,0],theta))/m
 #    if (i>iterations/4) and (i<iterations/2):
 #        x[0,1] = (force_drive(x[0,0],-u) - force_disturbance(x[0,0],theta))/m + n[0,i] + ext_input[0,i]
 #    else:
@@ -111,6 +116,7 @@ for i in range(iterations-1):
     y_history[i,:,:] = y
     x_history[i,:,:] = x
     u_history[i] = u
+    a_history[i] = a
     v_history[i,:,:] = v
     
     
@@ -139,6 +145,7 @@ plt.figure()
 plt.plot(np.arange(0, T-dt, dt), y_history[:-1,0,0], 'b', np.arange(0, T-dt, dt), v_ref_history[:-1], 'k')
 
 plt.figure()
-plt.plot(np.arange(0, T-dt, dt), -u_history[:-1], 'g')
+plt.plot(np.arange(0, T-dt, dt), a_history[:-1], 'b')
+plt.title('Control')
 
 print(np.var(y_history[int(T/(4*dt)):-1,0,0]))
