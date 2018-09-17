@@ -29,7 +29,7 @@ plt.rc('legend', fontsize=SMALL_SIZE)    # legend fontsize
 plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
 
 
-simulation = 0
+simulation = 1
 
 # 0: PID control as active inference
 # 1: PID tuning based on means of observation errors
@@ -45,7 +45,7 @@ dt = .01
 if simulation == 0:
     T = 50
 elif simulation == 1:
-    T = 500
+    T = 300
 elif simulation == 2:
     T = 900
 elif simulation == 3:
@@ -166,7 +166,7 @@ elif simulation == 3:
     mu_gamma_z = 2. * np.ones((obs_states, temp_orders_states - 1))    # log-precisions
     mu_gamma_z = 0.0 * np.ones((obs_states, temp_orders_states - 1))    # log-precisions
 else:
-    mu_gamma_z = 2.0 * np.ones((obs_states, temp_orders_states - 1))    # log-precisions
+    mu_gamma_z = -4.0 * np.ones((obs_states, temp_orders_states - 1))    # log-precisions
 mu_gamma_z[0, 1] = mu_gamma_z[0, 0] - np.log(2 * gamma)
 #mu_gamma_z[0, 0] = 3.708050201
 #mu_gamma_z[0, 1] = -.6931471806
@@ -346,14 +346,14 @@ for i in range(iterations - 1):
     dFdmu_x[0, :-1] = np.array([mu_pi_z * - (rho - mu_x[0, :-1]) + mu_pi_w * alpha * (mu_x[0, 1:] + alpha * (mu_x[0, :-1] - eta_x))])
     
     # action
-    dFdy = mu_pi_z * (rho - mu_x[0, :-1])
+    dFdy = mu_pi_z * (rho - eta_x)
     dyda = - np.ones((obs_states, temp_orders_states-1))
 #    dyda = dsigmoid(a)
     dFda = np.zeros((obs_states, temp_orders_states-1))
     dFda[0, 0] = np.sum(dFdy * dyda)
     
     # attention
-    dFdmu_gamma_z = .5 * (mu_pi_z * (rho - mu_x[0, :-1])**2 - 1) + mu_p_gamma_z * (mu_gamma_z - eta_gamma_z)
+    dFdmu_gamma_z = .5 * (mu_pi_z * (rho - eta_x)**2 - 1)# + mu_p_gamma_z * (mu_gamma_z - eta_gamma_z)
     dFdmu_gamma_w = .5 * (mu_pi_w * (mu_x[0, :-1] + alpha * (mu_x[0, :-1] - eta_x))**2 - 1) + mu_p_gamma_w * (mu_gamma_w - eta_gamma_w)
     
     
@@ -368,7 +368,7 @@ for i in range(iterations - 1):
         
     if simulation == 1 and (i > iterations/5):
         mu_gamma_z += dt * k_mu_gamma_z * phi
-        mu_gamma_w += dt * k_mu_gamma_w * psi
+#        mu_gamma_w += dt * k_mu_gamma_w * psi
 #        if i > 3*iterations/4:
 #            kappa_z = 50
 ##            kappa_z = 50 * np.tanh((i - iterations/4 - iterations/8)/iterations*1)+1
