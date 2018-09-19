@@ -10,8 +10,10 @@ Cruise control model (elaborated from 'Feedback systems' by Astrom)
 import numpy as np
 import matplotlib.pyplot as plt
 
-dt = .01
-T = 10
+plt.close('all')
+
+dt = .05
+T = 50
 iterations = int(T/dt)
 
 variables = 1
@@ -38,10 +40,13 @@ u = 0                                       # input
 v = np.zeros((variables,temp_orders))       # z[0]: error, z[1]: integral of the error
 
 n = np.random.randn(iterations,temp_orders+1)
-n[:,1] *= np.sqrt(2)
+#n[:,1] *= np.sqrt(2)
 
-k_p = 0.5
-k_i = 1.0
+k_p = 4
+k_i = 7
+
+k_i = np.exp(0)
+k_p = k_i/2
 
 v_ref = 10
 
@@ -82,28 +87,22 @@ def torque(v):
 def omega(v):
     return alpha_n*v
     
-    
+a = 0
 for i in range(iterations-1):
     print(i)
     
-    dn2 = - 1.0 * n[i, 1] + n[i, 2] / np.sqrt(dt)
-    n[i+1, 1] = n[i, 1] + dt * dn2
+#    dn2 = - 1.0 * n[i, 1] + n[i, 2] / np.sqrt(dt)
+#    n[i+1, 1] = n[i, 1] + dt * dn2
     
-    dn = - 1.0 * n[i, 0] + n[i, 1]
-    n[i+1, 0] = n[i, 0] + dt * dn
+#    dn = - 1.0 * n[i, 0] + n[i, 1]
+#    n[i+1, 0] = n[i, 0] + dt * dn
     
 #    v[0,1] = y[0,0] - v_ref
 #    v[0,0] += dt*v[0,1]
 #    
 #    u = k_p*v[0,1] + k_i*v[0,0]
     
-    v[0,1] = y[0,1] - 0.0
-    v[0,0] = y[0,0] - v_ref
-    
-    u += dt*(k_p*v[0,1] + k_i*v[0,0])
-    a = sigmoid(u)
-    
-#    ext_input[0,i] = .01*np.exp((i+iterations/2)*dt**1.3)
+    #    ext_input[0,i] = .01*np.exp((i+iterations/2)*dt**1.3)
     x[0,1] = (force_drive(x[0,0],-a) - force_disturbance(x[0,0],theta))/m
 #    if (i>iterations/4) and (i<iterations/2):
 #        x[0,1] = (force_drive(x[0,0],-u) - force_disturbance(x[0,0],theta))/m + n[0,i] + ext_input[0,i]
@@ -112,6 +111,17 @@ for i in range(iterations-1):
     x[0,0] += dt*x[0,1]
     y = x + n[i,:-1]
     
+#    v[0,1] = y[0,1] - 0.0
+#    v[0,0] = y[0,0] - v_ref
+    
+    v[0,1] = x[0,1] + n[i, 1] / np.sqrt(dt) - 0.0
+    v[0,0] = x[0,0] + n[i, 0] / np.sqrt(dt) - v_ref
+#    
+    u += dt*(k_p*v[0,1] + k_i*v[0,0])
+    a = sigmoid(u)
+    
+
+    
     # save data
     y_history[i,:,:] = y
     x_history[i,:,:] = x
@@ -119,33 +129,38 @@ for i in range(iterations-1):
     a_history[i] = a
     v_history[i,:,:] = v
     
-    
-plt.close('all')
 
-plt.figure(0)
-plt.suptitle('Proportional Control + Noise')
-plt.subplot(2,2,1)
-plt.plot(range(iterations), x_history[:,0,0], 'b', range(iterations), v_ref_history, 'k')
-plt.title('Velocity')
-plt.subplot(2,2,2)
-plt.plot(range(iterations), u_history, 'r')
+
+#plt.figure(0)
+#plt.suptitle('Proportional Control + Noise')
+#plt.subplot(2,2,1)
+#plt.plot(range(iterations), x_history[:,0,0], 'b', range(iterations), v_ref_history, 'k')
+#plt.title('Velocity')
+#plt.subplot(2,2,2)
+#plt.plot(range(iterations), u_history, 'r')
+#plt.title('Control')
+#plt.subplot(2,2,3)
+#plt.plot(range(iterations), v_history[:,0,1], 'g')
+#plt.title('Error')
+#plt.subplot(2,2,4)
+#plt.plot(range(iterations), v_history[:,0,0], 'k')
+#plt.title('Error integral')    
+
+
+plt.figure()
+plt.plot(np.arange(0, T-dt, dt), u_history[:-1,0], 'b')
 plt.title('Control')
-plt.subplot(2,2,3)
-plt.plot(range(iterations), v_history[:,0,1], 'g')
-plt.title('Error')
-plt.subplot(2,2,4)
-plt.plot(range(iterations), v_history[:,0,0], 'k')
-plt.title('Error integral')    
-
 
 plt.figure()
-plt.plot(ext_input[0,int(iterations/4):int(iterations/2)])
+plt.plot(np.arange(0, T-dt, dt), y_history[:-1,0,0], 'b')
+plt.title('Velocity')
 
 plt.figure()
-plt.plot(np.arange(0, T-dt, dt), y_history[:-1,0,0], 'b', np.arange(0, T-dt, dt), v_ref_history[:-1], 'k')
+plt.plot(np.arange(0, T-dt, dt), y_history[:-1,0,1], 'b')
+plt.title('Acceleration')
 
 plt.figure()
 plt.plot(np.arange(0, T-dt, dt), a_history[:-1], 'b')
-plt.title('Control')
+plt.title('Action')
 
-print(np.var(y_history[int(T/(4*dt)):-1,0,0]))
+print(np.var(y_history[:,0,0]))
