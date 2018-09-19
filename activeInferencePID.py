@@ -29,7 +29,7 @@ plt.rc('legend', fontsize=SMALL_SIZE)    # legend fontsize
 plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
 
 
-simulation = 1
+simulation = 0
 
 # 0: PID control as active inference
 # 1: PID tuning based on means of observation errors
@@ -41,13 +41,14 @@ simulation = 1
 # 7: PID tuning based on means of dynamic errors
 # 8: PID tuning based on means and variances of dynamic errors
 
-dt = .01
+dt = .05
 if simulation == 0:
-    T = 50
+    T = 100
 elif simulation == 1:
     T = 300
+    switch_condition_time = 0
 elif simulation == 2:
-    T = 900
+    T = 750
 elif simulation == 3:
     T = 150
 elif simulation == 4:
@@ -82,7 +83,7 @@ ga = 9.81                                                   # gravitational acce
 theta = 4.                                                  # hill angle
 C_r = .01                                                   # rolling friction coefficient
 C_d = .32                                                   # drag coefficient
-rho_air = 1.3                                               # air density
+rho = 1.3                                               # air density
 A = 2.4                                                     # frontal area agent
 
 # car's parameters
@@ -115,8 +116,8 @@ eta_gamma_w[0, 1] = - 18.
 ### free energy variables
 a = np.zeros((obs_states, temp_orders_states-1))
 control = np.zeros((obs_states, temp_orders_states-1))
-phi = np.zeros((obs_states, temp_orders_states-1))
-psi = np.zeros((obs_states, temp_orders_states-1))
+phi_z = np.zeros((obs_states, temp_orders_states-1))
+phi_w = np.zeros((hidden_states, temp_orders_states-1))
 
 mu_x = 0.0001*np.random.randn(hidden_states, temp_orders_states)
 #mu_x = np.zeros((hidden_states, temp_orders_states))
@@ -140,6 +141,8 @@ kappa_w = 10                                                # damping on precisi
 gamma_z = 0. * np.ones((obs_states, temp_orders_states))    # log-precisions
 gamma_z[:,1] = gamma_z[:,0] - np.log(2 * gamma)
 gamma_z[:,2] = gamma_z[:,1] - np.log(2 * gamma)
+
+gamma_z = 3. * np.ones((obs_states, temp_orders_states))    # log-precisions, uncorrelated noise
 pi_z = np.exp(gamma_z) * np.ones((obs_states, temp_orders_states))
 sigma_z = 1 / (np.sqrt(pi_z))
 z = np.zeros((iterations, obs_states, temp_orders_states))
@@ -161,7 +164,7 @@ for i in range(hidden_states):
 
 # agent's estimates of the noise (agent - generative model)
 if simulation == 0 or simulation == 4:
-    mu_gamma_z = 0.0 * np.ones((obs_states, temp_orders_states - 1))    # log-precisions
+    mu_gamma_z = -1.0 * np.ones((obs_states, temp_orders_states - 1))    # log-precisions
 elif simulation == 3:
     mu_gamma_z = 2. * np.ones((obs_states, temp_orders_states - 1))    # log-precisions
     mu_gamma_z = 0.0 * np.ones((obs_states, temp_orders_states - 1))    # log-precisions
@@ -177,7 +180,7 @@ if simulation == 3:
     mu_gamma_w = - 24 * np.ones((hidden_states, temp_orders_states - 1))   # log-precision
 #    mu_gamma_w = - 19 * np.ones((hidden_states, temp_orders_states - 1))   # log-precision
 else:
-    mu_gamma_w = - 22 * np.ones((hidden_states, temp_orders_states - 1))   # log-precision
+    mu_gamma_w = - 20 * np.ones((hidden_states, temp_orders_states - 1))   # log-precision
 
 #if simulation == 4:
 #    mu_gamma_w = - 24 * np.ones((hidden_states, temp_orders_states - 1))   # log-precision
@@ -199,20 +202,19 @@ mu_p_gamma_w = np.exp(mu_gamma_gamma_w) * np.ones((hidden_states, temp_orders_st
 x_history = np.zeros((iterations, hidden_states, temp_orders_states))
 y_history = np.zeros((iterations, obs_states, temp_orders_states - 1))
 v_history = np.zeros((iterations, hidden_causes, temp_orders_states - 1))
-rho_history = np.zeros((iterations, obs_states, temp_orders_states - 1))
+psi_history = np.zeros((iterations, obs_states, temp_orders_states - 1))
 mu_x_history = np.zeros((iterations, hidden_states, temp_orders_states))
 eta_x_history = np.zeros((iterations, hidden_causes, temp_orders_states - 1))
 eta_gamma_z_history = np.zeros((iterations, obs_states, temp_orders_states - 1))
 eta_gamma_w_history = np.zeros((iterations, hidden_causes, temp_orders_states - 1))
 a_history = np.zeros((iterations, temp_orders_states - 1))
+control_history = np.zeros((iterations, temp_orders_states - 1))
 mu_gamma_z_history = np.zeros((iterations, temp_orders_states-1))
 mu_gamma_w_history = np.zeros((iterations, temp_orders_states-1))
 mu_pi_z_history = np.zeros((iterations, temp_orders_states-1))
 mu_pi_w_history = np.zeros((iterations, temp_orders_states-1))
 dFdmu_gamma_z_history = np.zeros((iterations, temp_orders_states-1))
 dFdmu_gamma_w_history = np.zeros((iterations, temp_orders_states-1))
-phi_history = np.zeros((iterations, temp_orders_states-1))
-psi_history = np.zeros((iterations, temp_orders_states-1))
 
 xi_z_history = np.zeros((iterations, obs_states, temp_orders_states - 1))
 xi_w_history = np.zeros((iterations, hidden_states, temp_orders_states - 1))
@@ -229,6 +231,7 @@ gamma_w_history = np.zeros((iterations, temp_orders_states))
 ### FUNCTIONS ###
 
 def sigmoid(x):
+    return np.tanh(x)
     return 1 / (1+np.exp(-x))
 
 def dsigmoid(x):
@@ -243,7 +246,7 @@ def force_friction(v):
     return m * ga * C_r * np.sign(v)
 
 def force_drag(v):
-    return .5 * rho_air * C_d * A * v**2
+    return .5 * rho * C_d * A * v**2
 
 def force_disturbance(v, theta):
     return force_gravitation(theta) + force_friction(v) + force_drag(v)
@@ -274,12 +277,12 @@ def f_gm(x, v):
     return f(x, v, 0.0)
 
 def getObservation(x, v, a, w):
-    x[:, 1:] = f(x[:, :-1], v, a) + w
+    x[:, 1:] = f(x[:, :-1], v, a)# + w
     x[:, 0] += dt * x[:, 1]
     return g(x[:, :-1], v)
 
-def F(rho, mu_x, mu_gamma_z, mu_pi_w):
-    return .5 * (np.sum(np.exp(mu_gamma_z) * (rho - mu_x[0, :-1])**2) +
+def F(psi, mu_x, mu_gamma_z, mu_pi_w):
+    return .5 * (np.sum(np.exp(mu_gamma_z) * (psi - mu_x[0, :-1])**2) +
                  np.sum(mu_pi_w * (mu_x[0, 1:] + alpha * (mu_x[0, :-1] - eta_x))**2) -
                  np.log(np.prod(np.exp(mu_gamma_z)) * np.prod(mu_pi_w)))
 
@@ -298,10 +301,10 @@ for i in range(iterations - 1):
     mu_p_gamma_w = np.exp(mu_gamma_gamma_w) * np.ones((obs_states, temp_orders_states - 1))
     
     # include an external disturbance to test integral term
-#    if (simulation == 0) and (i > iterations/3) and (i < 2*iterations/3):
-#        v[0,0] = 5.0
-#    else:
-#        v[0,0] = 0.0
+    if (simulation == 0) and (i > iterations/3) and (i < 2*iterations/3):
+        v[0,0] = .6
+    else:
+        v[0,0] = 0.0
     
     if (simulation == 3):
         if (i > iterations/3):
@@ -319,20 +322,20 @@ for i in range(iterations - 1):
     
     
     # Analytical noise, for one extra level of generalised cooordinates, this is equivalent to an ornstein-uhlenbeck process
-    dw2 = - gamma * w[i, 0, 1] + w[i, 0, 2] / np.sqrt(dt)
-    dz2 = - gamma * z[i, 0, 1] + z[i, 0, 2] / np.sqrt(dt)
+#    dw2 = - gamma * w[i, 0, 1] + w[i, 0, 2] / np.sqrt(dt)
+#    dz2 = - gamma * z[i, 0, 1] + z[i, 0, 2] / np.sqrt(dt)
+#    
+#    w[i+1, 0, 1] = w[i, 0, 1] + dt * dw2
+#    z[i+1, 0, 1] = z[i, 0, 1] + dt * dz2
+#    
+#    dw = - gamma * w[i, 0, 0] + w[i, 0, 1]
+#    dz = - gamma * z[i, 0, 0] + z[i, 0, 1]
+#    
+#    w[i+1, 0, 0] = w[i, 0, 0] + dt * dw
+#    z[i+1, 0, 0] = z[i, 0, 0] + dt * dz
     
-    w[i+1, 0, 1] = w[i, 0, 1] + dt * dw2
-    z[i+1, 0, 1] = z[i, 0, 1] + dt * dz2
-    
-    dw = - gamma * w[i, 0, 0] + w[i, 0, 1]
-    dz = - gamma * z[i, 0, 0] + z[i, 0, 1]
-    
-    w[i+1, 0, 0] = w[i, 0, 0] + dt * dw
-    z[i+1, 0, 0] = z[i, 0, 0] + dt * dz
-    
-    y = getObservation(x, v, -control, w[i, 0, :-1])
-    rho = y + z[i, 0, :-1]
+    y = getObservation(x, v, control, w[i, 0, :-1])
+    psi = y + z[i, 0, :-1]
     
     # prediction errors (only used for plotting)
 #    eps_z = y - g_gm(mu_x[:, :-1], mu_v)
@@ -343,17 +346,21 @@ for i in range(iterations - 1):
     ### minimise free energy ###
     # perception
     Dmu_x[0, :-1] = mu_x[0, 1:]
-    dFdmu_x[0, :-1] = np.array([mu_pi_z * - (rho - mu_x[0, :-1]) + mu_pi_w * alpha * (mu_x[0, 1:] + alpha * (mu_x[0, :-1] - eta_x))])
+#    dFdmu_x[0, :-1] = np.array([mu_pi_z * - (psi - mu_x[0, :-1]) + mu_pi_w * alpha * (mu_x[0, 1:] + alpha * (mu_x[0, :-1] - eta_x))])
+    dFdmu_x[0, :-1] = np.array([mu_pi_z * - (y + z[i, 0, :-1]/np.sqrt(dt) - mu_x[0, :-1]) + mu_pi_w * alpha * (mu_x[0, 1:] + alpha * (mu_x[0, :-1] - eta_x))])
+#    dFdmu_x[0, :-1] = np.array([mu_pi_w * alpha * (mu_x[0, 1:] + alpha * (mu_x[0, :-1] - eta_x))])
     
     # action
-    dFdy = mu_pi_z * (rho - eta_x)
-    dyda = - np.ones((obs_states, temp_orders_states-1))
-#    dyda = dsigmoid(a)
+#    dFdy = mu_pi_z * (psi - mu_x[0, :-1])
+    dFdy = mu_pi_z * (y + z[i, 0, :-1]/np.sqrt(dt) - mu_x[0, :-1])
+    dyda = np.ones((obs_states, temp_orders_states-1))
     dFda = np.zeros((obs_states, temp_orders_states-1))
     dFda[0, 0] = np.sum(dFdy * dyda)
     
     # attention
-    dFdmu_gamma_z = .5 * (mu_pi_z * (rho - eta_x)**2 - 1)# + mu_p_gamma_z * (mu_gamma_z - eta_gamma_z)
+#    dFdmu_gamma_z = .5 * (mu_pi_z * (psi - mu_x[0, :-1])**2 - 1) + mu_p_gamma_z * (mu_gamma_z - eta_gamma_z)
+#    dFdmu_gamma_z = .5 * (mu_pi_z * (y + z[i, 0, :-1]/np.sqrt(dt) - mu_x[0, :-1])**2 - 1) + mu_p_gamma_z * (mu_gamma_z - eta_gamma_z)
+    dFdmu_gamma_z = .5 * (mu_pi_z * (y**2 + z[i, 0, :-1]**2 + mu_x[0, :-1]**2 + 2*y*z[i, 0, :-1]/np.sqrt(dt) - 2*mu_x[0, :-1]*z[i, 0, :-1]/np.sqrt(dt) - 2*y*mu_x[0, :-1]) - 1) + mu_p_gamma_z * (mu_gamma_z - eta_gamma_z)
     dFdmu_gamma_w = .5 * (mu_pi_w * (mu_x[0, :-1] + alpha * (mu_x[0, :-1] - eta_x))**2 - 1) + mu_p_gamma_w * (mu_gamma_w - eta_gamma_w)
     
     
@@ -361,29 +368,31 @@ for i in range(iterations - 1):
     mu_x += dt * (Dmu_x - k_mu_x * dFdmu_x)
     a += dt * - k_a * dFda
     
-    control = np.array([sigmoid(a[0,0]), 0.])
+    control = np.array([sigmoid(a[0,0]), 0])
+    control = sigmoid(a)
 
-    phi += dt * (- dFdmu_gamma_z - kappa_z * phi)
-    psi += dt * (- dFdmu_gamma_w - kappa_w * psi)
+    phi_z += dt * (- dFdmu_gamma_z - kappa_z * phi_z)
+    phi_w += dt * (- dFdmu_gamma_w - kappa_w * phi_w)
         
-    if simulation == 1 and (i > iterations/5):
-        mu_gamma_z += dt * k_mu_gamma_z * phi
-#        mu_gamma_w += dt * k_mu_gamma_w * psi
-#        if i > 3*iterations/4:
-#            kappa_z = 50
+#    if simulation == 1 and (i > switch_condition_time/dt):
+#        mu_gamma_z += dt * k_mu_gamma_z * phi_z
+#        mu_gamma_w += dt * k_mu_gamma_w * phi_w
+#        if i > 3*switch_condition_time/4/dt:
+#            kappa_z = 20
 ##            kappa_z = 50 * np.tanh((i - iterations/4 - iterations/8)/iterations*1)+1
 #            kappa_z_history[i] = kappa_z
     
     if simulation == 2 and (i > iterations/3):
-        mu_gamma_z += dt * k_mu_gamma_z * phi
-        if i > iterations/3 + iterations/16:
+        mu_gamma_z += dt * k_mu_gamma_z * phi_z
+#        if i > iterations/3 + iterations/16:
 #            kappa_z = 50 * np.tanh((i - iterations/3 - iterations/16)/(50*T))+10
-            kappa_z_history[i] = kappa_z
-            if i > 2*iterations/3:
-                 mu_gamma_gamma_z = 3 * np.ones((obs_states, temp_orders_states - 1))
+#            kappa_z_history[i] = kappa_z
+        if i > 2*iterations/3:
+#            eta_gamma_z = gamma_z[0,:-1]
+            mu_gamma_gamma_z = 2 * np.ones((obs_states, temp_orders_states - 1))
     
     if simulation == 5:
-        mu_gamma_z += dt * k_mu_gamma_z * phi
+        mu_gamma_z += dt * k_mu_gamma_z * phi_z
         if i > iterations/8:
             kappa_z = 50 * np.tanh((i - iterations/8)/(50*T))+10
             kappa_z_history[i] = kappa_z
@@ -432,12 +441,13 @@ for i in range(iterations - 1):
              mu_gamma_gamma_w = 5 * np.ones((obs_states, temp_orders_states - 1))
         
     # save history
-    rho_history[i, :] = rho
+    psi_history[i, :] = psi
     mu_x_history[i, :, :] = mu_x
     eta_x_history[i] = eta_x
     eta_gamma_z_history[i] = eta_gamma_z
     eta_gamma_w_history[i] = eta_gamma_w
-    a_history[i] = control
+    a_history[i] = a
+    control_history[i] = control
     v_history[i] = v
     mu_gamma_z_history[i] = mu_gamma_z
     mu_gamma_w_history[i] = mu_gamma_w
@@ -447,10 +457,8 @@ for i in range(iterations - 1):
     
 #    xi_z_history[i, :, :] = xi_z
 #    xi_w_history[i, :, :] = xi_w
-    FE_history[i] = F(rho, mu_x, mu_gamma_z, mu_pi_w)
+    FE_history[i] = F(psi, mu_x, mu_gamma_z, mu_pi_w)
     
-    phi_history[i] = phi
-    psi_history[i] = psi
     dFdmu_gamma_z_history[i] = dFdmu_gamma_z
     dFdmu_gamma_w_history[i] = dFdmu_gamma_z
     mu_pi_z_history[i] = mu_pi_z
@@ -458,9 +466,9 @@ for i in range(iterations - 1):
 
 plt.figure(figsize=(9, 6))
 plt.xlim((0., T))
-plt.plot(np.arange(0, T-dt, dt), rho_history[:-1,0,0], 'b', linewidth=2, label='Measured velocity, $\\rho$')
-plt.plot(np.arange(0, T-dt, dt), mu_x_history[:-1,0,0], 'r', linewidth=2, label='Expected velocity, $\mu_x$')
-plt.plot(np.arange(0, T-dt, dt), eta_x_history[:-1,0,0], 'k--', linewidth=2, label='Desired velocity, $\eta_x$')
+plt.plot(np.arange(0, T-dt, dt), psi_history[:-1,0,0], 'b', linewidth=1, label='Measured velocity, $\psi$')
+plt.plot(np.arange(0, T-dt, dt), mu_x_history[:-1,0,0], 'r', linewidth=1, label='Expected velocity, $\mu_x$')
+plt.plot(np.arange(0, T-dt, dt), eta_x_history[:-1,0,0], 'k--', linewidth=1, label='Desired velocity, $\eta_x$')
 plt.title('Hidden state, x (car velocity)')
 plt.xlabel('Time ($s$)')
 plt.ylabel('Velocity ($km/h$)')
@@ -469,7 +477,7 @@ if simulation == 0:
 #    plt.text(T+4, eta_x_history[-2,0,0], "<- Target", size=20, rotation=0., ha="center", va="center")#, bbox=dict(boxstyle="round", fc="w", ec="0.5", alpha=0.9))
     plt.savefig("figures/activeInferencePID_a.pdf")
 elif simulation == 1:
-    plt.axvline(x=iterations*dt/5, linewidth=3, color='k', linestyle='-.')
+    plt.axvline(x=switch_condition_time, linewidth=3, color='k', linestyle='-.')
     plt.savefig("figures/activeInferencePIDTuning_a.pdf")
 elif simulation == 2:
     plt.savefig("figures/activeInferencePIDTuningHyperPriors_a.pdf")
@@ -485,7 +493,7 @@ elif simulation == 6:
 
 plt.figure(figsize=(9, 6))
 plt.xlim((0., T))
-plt.plot(np.arange(0, T-dt, dt), rho_history[:-1,0,1], 'b', label='Measured acceleration, $\\rho\'$')
+plt.plot(np.arange(0, T-dt, dt), psi_history[:-1,0,1], 'b', label='Measured acceleration, $\psi\'$')
 plt.plot(np.arange(0, T-dt, dt), mu_x_history[:-1,0,1], 'r', label='Estimated acceleration, $\mu_x\'$')
 plt.plot(np.arange(0, T-dt, dt), eta_x_history[:-1,0,1], 'g', label='Desired acceleration, $\eta_x\'$')
 plt.title('Hidden state, x\' (car acceleration)')
@@ -495,7 +503,7 @@ plt.legend(loc=1)
 if simulation == 0:
     plt.savefig("figures/activeInferencePID_b.pdf")
 elif simulation == 1:
-    plt.axvline(x=iterations*dt/5, linewidth=3, color='k', linestyle='-.')
+    plt.axvline(x=switch_condition_time, linewidth=3, color='k', linestyle='-.')
     plt.savefig("figures/activeInferencePIDTuning_b.pdf")
 elif simulation == 2:
     plt.savefig("figures/activeInferencePIDTuningHyperPriors_b.pdf")
@@ -533,7 +541,7 @@ elif simulation == 6:
 plt.figure(figsize=(9, 6))
 plt.xlim((0., T))
 plt.title('Motor output, a (control)')
-plt.plot(np.arange(0, T-dt, dt), a_history[:-1,0], label='Action, a')
+plt.plot(np.arange(0, T-dt, dt), control_history[:-1,0], label='Action, a')
 plt.xlabel('Time ($s$)')
 plt.ylabel('Acceleration ($km/h^2$)')
 if simulation == 0:
@@ -541,7 +549,8 @@ if simulation == 0:
     plt.legend(loc=1)
     plt.savefig("figures/activeInferencePID_c.pdf")
 elif simulation == 1:
-    plt.axvline(x=iterations*dt/5, linewidth=3, color='k', linestyle='-.')
+    plt.axvline(x=switch_condition_time, linewidth=3, color='k', linestyle='-.')
+    plt.legend(loc=1)
     plt.savefig("figures/activeInferencePIDTuning_d.pdf")
 elif simulation == 2:
     plt.savefig("figures/activeInferencePIDTuningHyperPriors_d.pdf")
@@ -556,18 +565,20 @@ elif simulation == 6:
     plt.savefig("figures/activeInferencePIDModelUncertainty_d.pdf")
 
 if simulation == 0:
-    print(np.var(rho_history[int(T/4/dt):int(T/dt),0,0]))
+#    print(np.var(psi_history[int(T/2/dt):int(T/dt),0,0]))
+    print(np.var(psi_history[:,0,0]))
 elif simulation == 1:
-    print(np.var(rho_history[int(T/4/dt):int(T/2/dt),0,0]))
-    print(np.var(rho_history[int(3*T/4/dt+1):int(T/dt),0,0]))
+#    print(np.var(psi_history[int(T/4/dt):int(T/2/dt),0,0]))
+#    print(np.var(psi_history[int(3*T/4/dt+1):int(T/dt),0,0]))
+    print(np.var(psi_history[:,0,0]))
 elif simulation == 5 or simulation == 6 or simulation == 7:
-    print(np.var(rho_history[int(T/4/dt):int(T/2/dt),0,0]))
-    print(np.var(rho_history[int(T/2/dt+1):int(T/dt),0,0]))
+    print(np.var(psi_history[int(T/4/dt):int(T/2/dt),0,0]))
+    print(np.var(psi_history[int(T/2/dt+1):int(T/dt),0,0]))
 elif simulation == 2 or simulation == 8:
-    print(np.var(rho_history[int(T/6/dt):int(T/3/dt),0,0]))
-    print(np.var(rho_history[int(T/2/dt):int(2*T/3/dt),0,0]))
-    print(np.var(rho_history[int(5*T/6/dt):int(T/dt),0,0]))
-
+    print(np.var(psi_history[int(T/6/dt):int(T/3/dt),0,0]))
+    print(np.var(psi_history[int(T/2/dt):int(2*T/3/dt),0,0]))
+    print(np.var(psi_history[int(5*T/6/dt):int(T/dt),0,0]))
+        
 if simulation == 1 or simulation == 2 or simulation == 5:
     plt.figure(figsize=(9, 6))
     plt.xlim((0., T))
@@ -580,11 +591,11 @@ if simulation == 1 or simulation == 2 or simulation == 5:
     plt.plot(np.arange(0, T-dt, dt), mu_gamma_z_history[:-1, 1], color='orange', label='Expected log-precision, $\mu_{\gamma_{z\'}}$')
     plt.plot(np.arange(0, T-dt, dt), gamma_z_history[:-1, 1], 'c', label='Real log-precision, $\gamma_{z\'}$')
 #    plt.plot(np.arange(0, T-dt, dt), eta_gamma_z_history[:-1, 0, 0], 'g', label='Prior precision, $\eta_{\gamma_z}$')
-#    plt.axhline(y=-np.log(np.var(rho_history[int(T/(4*dt)):-1,0,0])), xmin=0.0, xmax=T, color='k', label='Measured precision')
+#    plt.axhline(y=-np.log(np.var(psi_history[int(T/(4*dt)):-1,0,0])), xmin=0.0, xmax=T, color='k', label='Measured precision')
     plt.xlabel('Time ($s$)')
     plt.legend(loc=4)
     if simulation == 1:
-        plt.axvline(x=iterations*dt/5, linewidth=3, color='k', linestyle='-.')
+        plt.axvline(x=switch_condition_time, linewidth=3, color='k', linestyle='-.')
         plt.savefig("figures/activeInferencePIDTuning_d.pdf")
     if simulation == 2:
         plt.savefig("figures/activeInferencePIDTuningHyperPriors_e.pdf")
@@ -599,7 +610,7 @@ if simulation == 1 or simulation == 2 or simulation == 5:
 #    plt.plot(np.arange(0, T-dt, dt), mu_gamma_z_history[:-1, 1], 'r', label='Expected log-precision, $\mu_{\gamma_{z\'}}$')
 #    plt.plot(np.arange(0, T-dt, dt), gamma_z_history[:-1, 1], 'b', label='Real log-precision, $\gamma_{z\'}$')
 ##    plt.plot(np.arange(0, T-dt, dt), eta_gamma_z_history[:-1, 0, 1], 'g', label='Prior precision, $\eta_{\gamma_{z\'}}$')
-##    plt.axhline(y=-np.log(np.var(rho_history[int(T/(4*dt)):-1,0,1])), xmin=0.0, xmax=T, color='k', label='Measured precision')
+##    plt.axhline(y=-np.log(np.var(psi_history[int(T/(4*dt)):-1,0,1])), xmin=0.0, xmax=T, color='k', label='Measured precision')
 #    plt.xlabel('Time ($s$)')
 #    plt.legend(loc=1)
 #    if simulation == 1:
@@ -615,7 +626,7 @@ if simulation == 6:
     plt.title('Log-precision, $\gamma_w$')
     plt.plot(np.arange(0, T-dt, dt), mu_gamma_w_history[:-1, 0], 'r', label='Estimated log-precision, $\mu_{\gamma_w}$')
     plt.plot(np.arange(0, T-dt, dt), gamma_w_history[:-1, 0], 'b', label='Real log-precision, $\gamma_w$')
-    #plt.axhline(y=-np.log(np.var(rho_history[int(T/(4*dt)):-1,0,0])), xmin=0.0, xmax=T, color='g', label='Measured precision')
+    #plt.axhline(y=-np.log(np.var(psi_history[int(T/(4*dt)):-1,0,0])), xmin=0.0, xmax=T, color='g', label='Measured precision')
     plt.plot(np.arange(0, T-dt, dt), eta_gamma_w_history[:-1, 0, 0], 'g', label='Prior precision, $\eta_{\gamma_{w\'}}$')
     plt.xlabel('Time ($s$)')
     plt.legend()
@@ -625,7 +636,7 @@ if simulation == 6:
     plt.title('Log-precision,, $\gamma_{w\'}$')
     plt.plot(np.arange(0, T-dt, dt), mu_gamma_w_history[:-1, 1], 'r', label='Expected log-precision, $\mu_{\gamma_{w\'}}$')
     plt.plot(np.arange(0, T-dt, dt), gamma_w_history[:-1, 1], 'b', label='Real log-precision, $\gamma_{w\'}$')
-    #plt.axhline(y=-np.log(np.var(rho_history[int(T/(4*dt)):-1,0,1])), xmin=0.0, xmax=T, color='g', label='Measured precision')
+    #plt.axhline(y=-np.log(np.var(psi_history[int(T/(4*dt)):-1,0,1])), xmin=0.0, xmax=T, color='g', label='Measured precision')
     plt.plot(np.arange(0, T-dt, dt), eta_gamma_w_history[:-1, 0, 1], 'g', label='Prior precision, $\eta_{\gamma_{w\'}}$')
     plt.xlabel('Time ($s$)')
     plt.legend()
@@ -639,13 +650,13 @@ if simulation == 6:
     #plt.title('Phi')
     #plt.plot(range(iterations-1), phi_history[:-1, 0])
     
-#    plt.figure()
-#    plt.title('Mu_pi_z0')
-#    plt.plot(range(iterations-1), mu_pi_z_history[:-1, 0])
-#    
-#    plt.figure()
-#    plt.title('Mu_pi_z1')
-#    plt.plot(range(iterations-1), mu_pi_z_history[:-1, 1])
+#plt.figure()
+#plt.title('Mu_pi_z0')
+#plt.plot(range(iterations-1), mu_pi_z_history[:-1, 0])
+#
+#plt.figure()
+#plt.title('Mu_pi_z1')
+#plt.plot(range(iterations-1), mu_pi_z_history[:-1, 1])
 #    
 #plt.figure()
 #plt.plot(kappa_z_history[:-1])
@@ -668,7 +679,7 @@ if simulation == 6:
 #plt.title('Log-precision, $\gamma_w$')
 #plt.plot(np.arange(0, T-dt, dt), mu_gamma_w_history[:-1, 0], 'r', label='Estimated log-precision, $\mu_{\gamma_w}$')
 ##    plt.plot(np.arange(0, T-dt, dt), gamma_w_history[:-1, 0], 'b', label='Real log-precision, $\gamma_w$')
-##plt.axhline(y=-np.log(np.var(rho_history[int(T/(4*dt)):-1,0,0])), xmin=0.0, xmax=T, color='g', label='Measured precision')
+##plt.axhline(y=-np.log(np.var(psi_history[int(T/(4*dt)):-1,0,0])), xmin=0.0, xmax=T, color='g', label='Measured precision')
 #plt.plot(np.arange(0, T-dt, dt), eta_gamma_w_history[:-1, 0, 0], 'g', label='Prior precision, $\eta_{\gamma_{w\'}}$')
 #plt.xlabel('Time ($s$)')
 #plt.legend()
@@ -678,7 +689,7 @@ if simulation == 6:
 #plt.title('Log-precision,, $\gamma_{w\'}$')
 #plt.plot(np.arange(0, T-dt, dt), mu_gamma_w_history[:-1, 1], 'r', label='Expected log-precision, $\mu_{\gamma_{w\'}}$')
 ##    plt.plot(np.arange(0, T-dt, dt), gamma_w_history[:-1, 1], 'b', label='Real log-precision, $\gamma_{w\'}$')
-##plt.axhline(y=-np.log(np.var(rho_history[int(T/(4*dt)):-1,0,1])), xmin=0.0, xmax=T, color='g', label='Measured precision')
+##plt.axhline(y=-np.log(np.var(psi_history[int(T/(4*dt)):-1,0,1])), xmin=0.0, xmax=T, color='g', label='Measured precision')
 #plt.plot(np.arange(0, T-dt, dt), eta_gamma_w_history[:-1, 0, 1], 'g', label='Prior precision, $\eta_{\gamma_{w\'}}$')
 #plt.xlabel('Time ($s$)')
 #plt.legend()
