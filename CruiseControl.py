@@ -12,8 +12,8 @@ import matplotlib.pyplot as plt
 
 plt.close('all')
 
-dt = .05
-T = 50
+dt = .02
+T = 200
 iterations = int(T/dt)
 
 variables = 1
@@ -39,13 +39,13 @@ y = np.zeros((variables,temp_orders))       # measured state
 u = 0                                       # input
 v = np.zeros((variables,temp_orders))       # z[0]: error, z[1]: integral of the error
 
-n = np.random.randn(iterations,temp_orders+1)
+n = np.exp(-3/2) * np.random.randn(iterations,temp_orders+1)
 #n[:,1] *= np.sqrt(2)
 
 k_p = 4
 k_i = 7
 
-k_i = np.exp(0)
+k_i = np.exp(-4)
 k_p = k_i/2
 
 v_ref = 10
@@ -64,6 +64,7 @@ v_ref_history = v_ref*np.ones((iterations))
 # functions
 
 def sigmoid(x):
+    return np.tanh(x)
     return 1 / (1+np.exp(-x))
 
 def force_gravitation(theta):
@@ -116,9 +117,10 @@ for i in range(iterations-1):
     
     v[0,1] = x[0,1] + n[i, 1] / np.sqrt(dt) - 0.0
     v[0,0] = x[0,0] + n[i, 0] / np.sqrt(dt) - v_ref
-#    
+
     u += dt*(k_p*v[0,1] + k_i*v[0,0])
     a = sigmoid(u)
+#    a = u
     
 
     
@@ -163,4 +165,4 @@ plt.figure()
 plt.plot(np.arange(0, T-dt, dt), a_history[:-1], 'b')
 plt.title('Action')
 
-print(np.var(y_history[:,0,0]))
+print(np.var(y_history[int(T/2/dt):-1,0,0]))
