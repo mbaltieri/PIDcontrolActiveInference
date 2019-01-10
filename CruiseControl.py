@@ -130,24 +130,6 @@ for i in range(iterations-1):
     u_history[i] = u
     a_history[i] = a
     v_history[i,:,:] = v
-    
-
-
-#plt.figure(0)
-#plt.suptitle('Proportional Control + Noise')
-#plt.subplot(2,2,1)
-#plt.plot(range(iterations), x_history[:,0,0], 'b', range(iterations), v_ref_history, 'k')
-#plt.title('Velocity')
-#plt.subplot(2,2,2)
-#plt.plot(range(iterations), u_history, 'r')
-#plt.title('Control')
-#plt.subplot(2,2,3)
-#plt.plot(range(iterations), v_history[:,0,1], 'g')
-#plt.title('Error')
-#plt.subplot(2,2,4)
-#plt.plot(range(iterations), v_history[:,0,0], 'k')
-#plt.title('Error integral')    
-
 
 plt.figure()
 plt.plot(np.arange(0, T-dt, dt), u_history[:-1,0], 'b')
