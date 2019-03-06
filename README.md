@@ -1,4 +1,4 @@
-# PIDControlActiveInferenceFEP
+# PID control as a process of active inference
 A full implementation of PID control under the framework of (variational) free energy minimisation and active inference. This implementation produces interesting results for the long standing problem of tuning parameters in PID controllers.
 
 The mathematical equivalence of PID control and active inference was first shown in [A Probabilistic Interpretation of PID Controllers Using Active Inference](https://link.springer.com/chapter/10.1007/978-3-319-97628-0_2).
