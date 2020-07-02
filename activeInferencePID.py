@@ -304,7 +304,7 @@ def pidControl(simulation, T, dt, switch_condition_time, learning, limit_case, m
         # attention
     #    dFdmu_gamma_z = .5 * (mu_pi_z * (psi - mu_x[0, :-1])**2 - 1) + mu_p_gamma_z * (mu_gamma_z - eta_gamma_z)       # if the noise is not white
         dFdmu_gamma_z = .5 * (mu_pi_z * (y**2 + z[i, 0, :-1]**2 + mu_x[0, :-1]**2 + 2*y*z[i, 0, :-1]/np.sqrt(dt) - 2*mu_x[0, :-1]*z[i, 0, :-1]/np.sqrt(dt) - 2*y*mu_x[0, :-1]) - 1) + mu_p_gamma_z * (mu_gamma_z - eta_gamma_z)
-        dFdmu_gamma_w = .5 * (mu_pi_w * (mu_x[0, :-1] + alpha * (mu_x[0, :-1] - eta_x))**2 - 1) + mu_p_gamma_w * (mu_gamma_w - eta_gamma_w)
+        dFdmu_gamma_w = .5 * (mu_pi_w * (mu_x[0, 1:] + alpha * (mu_x[0, :-1] - eta_x))**2 - 1) + mu_p_gamma_w * (mu_gamma_w - eta_gamma_w)
         
         
         ## update equations ##
